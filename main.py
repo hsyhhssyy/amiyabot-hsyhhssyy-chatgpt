@@ -95,9 +95,6 @@ async def _(data: Message):
     if not data.text:
         return
 
-    
-    log.info(f'{data.instance.appid}')
-
     if data.user_id in user_lock:
         await data.send(Chain(data).text('博士，我还在想上一个问题...>.<'))
         return
