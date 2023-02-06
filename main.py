@@ -104,7 +104,7 @@ async def _(data: Message):
 
     user_lock.append(data.user_id)
 
-    request_text = format_request(data.text_origin)
+    request_text = format_request(data.text_original)
 
     # 尝试确定context
     if get_quote_id(data) >0:
