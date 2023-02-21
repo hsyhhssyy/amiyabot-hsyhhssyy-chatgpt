@@ -19,7 +19,7 @@ class ChatGPTPluginInstance(PluginInstance):
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='1.1',
+    version='1.3',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话（接替兔妈维护）',
@@ -28,6 +28,10 @@ bot = ChatGPTPluginInstance(
 user_lock = []
 
 context_holder= {}
+
+def debug_log(message):
+    log.info(message)
+    pass
 
 async def check_talk(data: Message):
     if 'chat' in data.text.lower():
@@ -56,12 +60,12 @@ def get_quote_id(data):
     message = data.message
     if 'messageChain' in message.keys():
         for msg in message['messageChain']:
-            # log.info(f'{msg}')
+            debug_log(f'{msg}')
             if msg['type']=='Quote':
                 sender = msg['senderId']
-                # log.info(f'{sender}')
+                debug_log(f'{sender}')
                 if f'{sender}' == f'{data.instance.appid}':
-                    # log.info('find quote')
+                    debug_log('find quote')
                     return msg['id']
     
     return 0
@@ -69,25 +73,30 @@ def get_quote_id(data):
 def get_context(data):
     context_id = f'{data.channel_id}-{data.user_id}'
     if context_id in context_holder.keys():
-        log.info(f'context get :\n{context_holder[context_id]}')
+        debug_log(f'context get :\n{context_holder[context_id]}')
         return context_holder[context_id]
     else:
-        log.info(f'context get : [Null]')
+        debug_log(f'context get : [Null]')
         return ''
+
+def append_context(data,text):
+    context_id = f'{data.channel_id}-{data.user_id}'
+    if context_id in context_holder.keys():
+        debug_log(f'context set :\n{context_holder[context_id] + text}')
+        context_holder[context_id] = context_holder[context_id] + text
+    else:
+        debug_log(f'context set :\n{text}')
+        context_holder[context_id] = text
 
 def set_context(data,text):
     context_id = f'{data.channel_id}-{data.user_id}'
-    if context_id in context_holder.keys():
-        log.info(f'context set :\n{context_holder[context_id] + text}')
-        context_holder[context_id] = context_holder[context_id] + text
-    else:
-        log.info(f'context set :\n{text}')
-        context_holder[context_id] = text
+    debug_log(f'context set :\n{text}')
+    context_holder[context_id] = text
 
 def clear_context(data):
     context_id = f'{data.channel_id}-{data.user_id}'
     if context_id in context_holder.keys():
-        log.info(f'context clear')
+        debug_log(f'context clear')
         context_holder[context_id] =''
 
 @bot.on_message(verify=check_talk)
@@ -113,7 +122,7 @@ async def _(data: Message):
     else:
         clear_context(data)
     
-    # log.info(f'{request_text}')
+    debug_log(f'{request_text}')
 
     async with log.catch():
         await data.send(Chain(data).text('阿米娅思考中...').face(32))
@@ -132,7 +141,4 @@ async def _(data: Message):
     set_context(data,request_text+text+'\n\n')
 
 
-    if len(text) >= config['max_length']:
-        return Chain(data, reference=True).markdown(text.strip('\n').replace('\n', '<br>'))
-    else:
-        return Chain(data, reference=True).text(text.strip('\n'))
+    return Chain(data, reference=True).text(text.strip('\n'))
