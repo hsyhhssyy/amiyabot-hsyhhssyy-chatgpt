@@ -19,7 +19,7 @@ class ChatGPTPluginInstance(PluginInstance):
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='1.3',
+    version='1.4',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话（接替兔妈维护）',
@@ -42,17 +42,24 @@ def format_request(text):
 
     # 首先移除先导关键词
 
-    if text.startswith('兔兔'):
+    if text.startswith('兔兔chat'):
+        text=text.replace('兔兔chat','',1)
+        debug_log(f'[ChatGPT]移除先导词 兔兔chat')
+    elif text.startswith('兔兔CHAT'):
+        text=text.replace('兔兔CHAT','',1)
+        debug_log(f'[ChatGPT]移除先导词 兔兔CHAT')    
+    elif text.startswith('兔兔'):
         text=text.replace('兔兔','',1)
-    
-    if text.startswith('阿米娅'):
+        debug_log(f'[ChatGPT]移除先导词 兔兔')
+    elif text.startswith('阿米娅'):
         text=text.replace('阿米娅','',1)
-
-    if text.startswith('Amiya'):
+        debug_log(f'[ChatGPT]移除先导词 阿米娅')
+    elif text.startswith('Amiya'):
         text=text.replace('Amiya','',1)
-
-    if text.startswith('amiya'):
+        debug_log(f'[ChatGPT]移除先导词 Amiya')
+    elif text.startswith('amiya'):
         text=text.replace('amiya','',1)
+        debug_log(f'[ChatGPT]移除先导词 amiya')
 
     return text
 
