@@ -6,36 +6,30 @@ import json
 
 from amiyabot import PluginInstance, Message, Chain
 from core.util import create_dir, read_yaml, run_in_thread_pool
+from core.customPluginInstance import AmiyaBotPluginInstance
 from core import log
 
 curr_dir = os.path.dirname(__file__)
 
 
-class ChatGPTPluginInstance(PluginInstance):
+class ChatGPTPluginInstance(AmiyaBotPluginInstance):
     def install(self):
-        
-        self.default_global_config=json.dumps(read_yaml(f'{curr_dir}/config.yaml', _dict=True))
-        file_object2 = open(f"{curr_dir}/config_schema.json",'r', encoding='utf-8')
-        self.global_config_template = '\n'.join(file_object2.readlines())
-
         config_file = 'resource/plugins/chatGPT/config.yaml'
         if not os.path.exists(config_file):
-            if not hasattr(bot,"set_global_config"):
+            if not hasattr(bot,"set_config"):
                 create_dir(config_file, is_file=True)
                 shutil.copy(f'{curr_dir}/config.yaml', config_file)
             #else什么也不做，这就是插件在支持新式Config的环境中的第一次加载
         else:
-            if hasattr(bot, "set_global_config"):
+            if hasattr(bot, "set_config"):
                 yamlConfig = read_yaml(config_file, _dict=True)
-                bot.set_global_config(
-                    json.dumps(
-                    {
-                        "api_key": yamlConfig.get("api_key", ""),
-                        "stop_word": yamlConfig.get("stop_word", ""),
-                        "proxy": yamlConfig.get("proxy", ""),
-                        "predef_context": yamlConfig.get("predef_context", "")
-                    })
-                )
+                if "api_key" in yamlConfig: self.set_config(None, "api_key", yamlConfig["api_key"])
+                if "predef_context" in yamlConfig: self.set_config(None, "predef_context", yamlConfig["predef_context"])
+                if "base_url" in yamlConfig: self.set_config(None, "base_url", yamlConfig["base_url"])
+                if "proxy" in yamlConfig: self.set_config(None, "proxy", yamlConfig["proxy"])
+                if "model" in yamlConfig: self.set_config(None, "model", yamlConfig["model"])
+                if "stop_words" in yamlConfig: self.set_config(None, "stop_words", yamlConfig["stop_words"])
+                os.remove(config_file)
 
     def ask_amiya( prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
@@ -43,11 +37,15 @@ class ChatGPTPluginInstance(PluginInstance):
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='2.3',
+    version='2.4',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
-    document=f'{curr_dir}/README.md'
+    document=f'{curr_dir}/README.md',
+    channel_config_default=f'{curr_dir}/config_channel.yaml',
+    channel_config_schema=f'{curr_dir}/channel_config_schema.json', 
+    global_config_default=f'{curr_dir}/config.yaml',
+    global_config_schema=f'{curr_dir}/config_schema.json', 
 )
 user_lock = []
 
@@ -58,7 +56,7 @@ def debug_log(message):
     pass
 
 def get_config(configName):
-    if not hasattr(bot, "get_global_config"):
+    if not hasattr(bot, "get_config"):
         config_file = 'resource/plugins/chatGPT/config.yaml'
         yamlConfig = read_yaml(config_file, _dict=True)
         if configName in yamlConfig.keys() :
@@ -138,6 +136,11 @@ async def ask_amiya( prompt : Union[str, list],context_id : Optional[str] = None
     if proxy:
         debug_log(f"proxy set: {proxy}")
         openai.proxy = proxy
+        
+    base_url = get_config('base_url')
+    if base_url:
+        debug_log(f"base_url set: {base_url}")
+        openai.api_base = base_url
 
     user_lock.append(f'AskAmiya-{context_id}')
 
