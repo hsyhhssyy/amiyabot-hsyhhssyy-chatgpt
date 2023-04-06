@@ -134,4 +134,4 @@ use_stop_words指示是否使用配置文件里的stop_words来检测并拦截�
 | 2.1  | 加入Proxy参数 |
 | 2.2  | 加入stop_words参数并增加对Model的选择 |
 | 2.3  | 加入Ask_Amiya函数给其他插件调用 |
-| 2.4  | 加入base_url参数来支持反向代理 |
+| 2.4  | 1. 加入base_url参数来支持反向代理. 2.回复功能适配CQHttp( @wutongshufqw )  |

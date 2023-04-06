@@ -23,12 +23,12 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
         else:
             if hasattr(bot, "set_config"):
                 yamlConfig = read_yaml(config_file, _dict=True)
-                if "api_key" in yamlConfig: self.set_config(None, "api_key", yamlConfig["api_key"])
-                if "predef_context" in yamlConfig: self.set_config(None, "predef_context", yamlConfig["predef_context"])
-                if "base_url" in yamlConfig: self.set_config(None, "base_url", yamlConfig["base_url"])
-                if "proxy" in yamlConfig: self.set_config(None, "proxy", yamlConfig["proxy"])
-                if "model" in yamlConfig: self.set_config(None, "model", yamlConfig["model"])
-                if "stop_words" in yamlConfig: self.set_config(None, "stop_words", yamlConfig["stop_words"])
+                if "api_key" in yamlConfig: self.set_config("api_key", yamlConfig["api_key"],None)
+                if "predef_context" in yamlConfig: self.set_config("predef_context", yamlConfig["predef_context"],None)
+                if "base_url" in yamlConfig: self.set_config("base_url", yamlConfig["base_url"],None)
+                if "proxy" in yamlConfig: self.set_config("proxy", yamlConfig["proxy"],None)
+                if "model" in yamlConfig: self.set_config("model", yamlConfig["model"],None)
+                if "stop_words" in yamlConfig: self.set_config("stop_words", yamlConfig["stop_words"],None)
                 os.remove(config_file)
 
     def ask_amiya( prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
@@ -55,7 +55,7 @@ def debug_log(message):
     log.info(message)
     pass
 
-def get_config(configName):
+def get_config(configName,channel_id=None):
     if not hasattr(bot, "get_config"):
         config_file = 'resource/plugins/chatGPT/config.yaml'
         yamlConfig = read_yaml(config_file, _dict=True)
@@ -63,7 +63,7 @@ def get_config(configName):
             return yamlConfig[configName]
         return None
     
-    return bot.get_config(configName)
+    return bot.get_config(configName,channel_id)
 
 async def check_talk(data: Message):
     if 'chat' in data.text.lower():
@@ -115,7 +115,7 @@ def get_context(context_id):
         return context_holder[context_id]
     else:
         debug_log(f'context get : [Null]')
-        return ''
+        return []
 
 def set_context(context_id,context_object):
     debug_log(f'context set :\n{context_object}')
@@ -243,6 +243,11 @@ async def _(data: Message):
     if proxy:
         debug_log(f"proxy set: {proxy}")
         openai.proxy = proxy
+
+    base_url = get_config('base_url')
+    if base_url:
+        debug_log(f"base_url set: {base_url}")
+        openai.api_base = base_url
 
     user_lock.append(data.user_id)
 
