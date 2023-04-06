@@ -3,13 +3,13 @@
     "type": "object",
     "properties": {
       "predef_context": {
-        "type": ["array","null"]
+        "type": "array"
       },
       "stop_words": {
-        "type": ["array","null"]
+        "type": "array"
       },
       "model": {
-        "type": ["string","null"],
+        "type": "string",
         "enum": ["gpt-3.5-turbo", "gpt-4"]
       }
     }
