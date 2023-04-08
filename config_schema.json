@@ -15,6 +15,9 @@
       "base_url": {
         "type": ["string","null"]
       },
+      "override_other_plugin": {
+        "type": "boolean"
+      },
       "proxy": {
         "type": ["string","null"]
       },

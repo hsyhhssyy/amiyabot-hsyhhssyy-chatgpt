@@ -1,35 +1,88 @@
 import os
 import shutil
-from typing import Optional, Union
 import openai
 import json
+import asyncio
 
-from amiyabot import PluginInstance, Message, Chain
+from typing import Optional, Union
+from types import SimpleNamespace
+
+from amiyabot import Message, Chain
+from amiyabot.factory.factoryTyping import MessageHandlerItem
+
 from core.util import create_dir, read_yaml, run_in_thread_pool
 from core.customPluginInstance import AmiyaBotPluginInstance
 from core import log
+from core import bot as main_bot
 
 curr_dir = os.path.dirname(__file__)
 
+async def multi_keyword_verify(data: Message, keywords:list, level):
+    if all(substring in data.text for substring in keywords):
+        debug_log(f"命中新的Handler level = {level}")
+        return True, level
+    return False, 0
+
+async def keyword_before_func_verify(data: Message, keywords:list, func):
+    if any(substring in data.text for substring in keywords):
+        debug_log(f"命中新的Handler for:{data.text}")
+        try:
+            retval = await func(data)
+            debug_log(f'{retval}')
+            return retval
+        except Exception as e:
+            log.error(e,"ChatGPT Error:")
+    return False, 0
+
+async def async_load():
+
+    if bot.get_config('override_other_plugin') != True:
+        return
+
+    debug_log("ChatGPT Plugin Change Other Handler")
+    # 强制修改其他Bot的MessageHandler
+    for _,plugin in main_bot.plugins.items():
+        
+        # 1. 干员查询 amiyabot-arknights-operator / 干员查询-水月 arknights-operator-m&c  
+        if plugin.plugin_id.startswith('arknights-operator') or plugin.plugin_id.startswith('amiyabot-arknights-operator'):
+            handlers = plugin.get_container('message_handlers')                    
+            for handler in handlers:                  
+                if handler.keywords == ['语音','2.5版本先饶了他这一条，后面再说。']:
+                    old_level = handler.level
+                    handler.custom_verify = lambda data: multi_keyword_verify(data,['查询','语音'],old_level)
+                    handler.keywords = None
+                    handler.level = None
+                    debug_log(f"调整了{plugin.plugin_id}的handler:语音")
+                else:
+                    if callable(handler.custom_verify):
+                        try:
+                            retval = await handler.custom_verify(SimpleNamespace(text="新年好"))
+                            debug_log(f'{retval}')
+                            if retval[0] == True:
+                                old_func = handler.custom_verify
+                                handler.custom_verify = lambda data: keyword_before_func_verify(data,['查询'],old_func)
+                                debug_log(f"调整了{plugin.plugin_id}的handler:'干员名'")
+                        except Exception as e:
+                            log.error(e,"ChatGPT Error:")
 
 class ChatGPTPluginInstance(AmiyaBotPluginInstance):
     def install(self):
         config_file = 'resource/plugins/chatGPT/config.yaml'
-        if not os.path.exists(config_file):
-            if not hasattr(bot,"set_config"):
-                create_dir(config_file, is_file=True)
-                shutil.copy(f'{curr_dir}/config.yaml', config_file)
-            #else什么也不做，这就是插件在支持新式Config的环境中的第一次加载
-        else:
-            if hasattr(bot, "set_config"):
-                yamlConfig = read_yaml(config_file, _dict=True)
-                if "api_key" in yamlConfig: self.set_config("api_key", yamlConfig["api_key"],None)
-                if "predef_context" in yamlConfig: self.set_config("predef_context", yamlConfig["predef_context"],None)
-                if "base_url" in yamlConfig: self.set_config("base_url", yamlConfig["base_url"],None)
-                if "proxy" in yamlConfig: self.set_config("proxy", yamlConfig["proxy"],None)
-                if "model" in yamlConfig: self.set_config("model", yamlConfig["model"],None)
-                if "stop_words" in yamlConfig: self.set_config("stop_words", yamlConfig["stop_words"],None)
-                os.remove(config_file)
+        if os.path.exists(config_file):
+            # 清理旧的配置文件
+            yamlConfig = read_yaml(config_file, _dict=True)
+            if "api_key" in yamlConfig: self.set_config("api_key", yamlConfig["api_key"],None)
+            if "predef_context" in yamlConfig: self.set_config("predef_context", yamlConfig["predef_context"],None)
+            if "base_url" in yamlConfig: self.set_config("base_url", yamlConfig["base_url"],None)
+            if "proxy" in yamlConfig: self.set_config("proxy", yamlConfig["proxy"],None)
+            if "model" in yamlConfig: self.set_config("model", yamlConfig["model"],None)
+            if "stop_words" in yamlConfig: self.set_config("stop_words", yamlConfig["stop_words"],None)
+            os.remove(config_file)
+
+    def load(self):
+        loop = asyncio.get_event_loop()
+        loop.create_task(async_load())
+
 
     def ask_amiya( prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
@@ -37,7 +90,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='2.4',
+    version='2.5',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -55,14 +108,7 @@ def debug_log(message):
     log.info(message)
     pass
 
-def get_config(configName,channel_id=None):
-    if not hasattr(bot, "get_config"):
-        config_file = 'resource/plugins/chatGPT/config.yaml'
-        yamlConfig = read_yaml(config_file, _dict=True)
-        if configName in yamlConfig.keys() :
-            return yamlConfig[configName]
-        return None
-    
+def get_config(configName,channel_id=None):    
     return bot.get_config(configName,channel_id)
 
 async def check_talk(data: Message):
