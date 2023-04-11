@@ -6,8 +6,6 @@ from amiyabot import Message
 from core import log
 from core import bot as main_bot
 
-from ask_chat_gpt import ChatGPTDelegate
-
 class OtherPluginSuppressor:
     def __init__(self) -> None:
         self.bot = None

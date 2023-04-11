@@ -1,15 +1,11 @@
-import os
-import shutil
 import openai
-import json
-import asyncio
-import datetime
+
+from datetime import datetime
 
 from typing import Optional, Tuple, Union
-from types import SimpleNamespace
-from peewee import *
+from peewee import AutoField,CharField,IntegerField,DateTimeField
 
-from amiyabot import Message, Chain
+from amiyabot import Message
 
 from core import log
 from core.util import run_in_thread_pool
@@ -27,23 +23,24 @@ fields = {
 }
 
 
-def create_new_model(name, fields, base_model):
+def create_new_model(name, fields, base_model,table_name):
     model_attrs = {k: v for k, v in fields.items()}
     model_attrs['Meta'] = type(
-        'Meta', (), {'database': base_model._meta.database})
+        'Meta', (), {'database': base_model._meta.database,'table_name':table_name})
     new_model = type(name, (base_model,), model_attrs)
     return new_model
 
 
 AmiyaBotHsyhhssyyChatgptTokenConsumeModel = create_new_model(
-    'AmiyaBotHsyhhssyyChatgptTokenConsume', fields, PluginConfiguration)
-
+    'AmiyaBotHsyhhssyyChatgptTokenConsume', fields, PluginConfiguration,'amiyabot-hsyhhssyy-chatgpt-token-consume')
 
 class ChatGPTDelegate:
     def __init__(self) -> None:
         self.context_holder = {}
         self.user_lock = []
         self.bot = None
+        
+        AmiyaBotHsyhhssyyChatgptTokenConsumeModel.create_table(safe=True)
 
     def get_config(self, configName, channel_id=None):
         conf = self.bot.get_config(configName, channel_id)
@@ -108,17 +105,7 @@ class ChatGPTDelegate:
             completion_tokens=int(usage['completion_tokens']),
             total_tokens=int(usage['total_tokens']), exec_time=datetime.now())
 
-        return f"{text}".strip()
-
-    async def on_message(self, data:Message):
-        
-        context_id = f'{data.channel_id}-{data.user_id}'
-        deep_cosplay = self.get_config('deep_cosplay',data.channel_id)
-
-        if deep_cosplay:
-            pass
-        else:
-            ret = self.ask_amiya()
+        return True,f"{text}".strip()
 
     async def ask_amiya(self, prompt : Union[str, list],context_id : Optional[str] = None, channel_id :str = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> str :

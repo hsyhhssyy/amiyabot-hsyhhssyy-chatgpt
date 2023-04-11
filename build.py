@@ -51,7 +51,7 @@ else:
     os.system(f'rm {plugin_id}-*.zip')
     os.system(f'zip -q -r {plugin_id}-{version}.zip *')
     os.system(f'rm -rf {amiya_bot_plugin_path}/{plugin_id}-*')
-    os.system(f'mv {plugin_id}-*.zip {amiya_bot_plugin_path}/plugins/')
+    os.system(f'cp {plugin_id}-*.zip {amiya_bot_plugin_path}/')
     os.system(f'docker restart amiya-bot')
     
 
