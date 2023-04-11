@@ -18,6 +18,12 @@
       "override_other_plugin": {
         "type": "boolean"
       },
+      "deep_cosplay": {
+        "type": "boolean"
+      },
+      "show_log": {
+        "type": "boolean"
+      },
       "proxy": {
         "type": ["string","null"]
       },

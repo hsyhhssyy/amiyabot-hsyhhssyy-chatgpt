@@ -5,6 +5,9 @@
       "predef_context": {
         "type": "array"
       },
+      "deep_cosplay": {
+        "type": "boolean"
+      },
       "stop_words": {
         "type": "array"
       },
