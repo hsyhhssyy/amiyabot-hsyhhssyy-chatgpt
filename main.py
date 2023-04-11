@@ -39,10 +39,13 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
         loop = asyncio.get_event_loop()
         loop.create_task(suppress_other_plugin(self))
 
+    def get_prefix(self):
+        return self._prefix_keywords
+
     def debug_log(self, message):
         show_log = bot.get_config("show_log")
         if show_log == True:
-            log.info(message)
+            log.info(f'[ChatGPT]{message}')
 
     def ask_amiya( prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
@@ -122,21 +125,46 @@ deep_cosplay_context = {}
 async def _(data: Message):
     if not data.text:
         return
-    request_text = format_request(data.text)
+
+
+    prefix = ['阿米娅', '阿米兔', '兔兔', '兔子', '小兔子', 'Amiya', 'amiya']
+
+    cosplay = bot.get_config('deep_cosplay',data.channel_id)
+
+    bot.debug_log(f'check_prefix=False --- {cosplay} {prefix}')
+
+    force = False
+
+    if data.is_at == True:
+        force = True
+    
+    if data.text_original.startswith(tuple(prefix)):
+        force = True
 
     if bot.get_config('deep_cosplay',data.channel_id) == True:
-        context = deep_cosplay_context.get(data.channel_id)
-        if context is None:
-            context = DeepCosplay(delegate,data.channel_id)
-            deep_cosplay_context[data.channel_id] = context
-        
-        await context.on_message(data)
+        try:
+            context = deep_cosplay_context.get(data.channel_id)
+            if context is None:
+                context = DeepCosplay(delegate,data.channel_id)
+                deep_cosplay_context[data.channel_id] = context
+        except Exception as e:
+            log.error(e)
+            return
+
+        await context.on_message(data,force)
+    else:
+        if force:
+            request_text = format_request(data.text)
+            context_id = f'{data.channel_id}-{data.user_id}'
+            amiya_answer = await delegate.ask_amiya(request_text,context_id,data.channel_id,True,True,True)
+            return Chain(data, reference=True).text(amiya_answer)
     
 @bot.on_message(verify=check_talk,allow_direct=True)
 async def _(data: Message):
     if not data.text:
         return
-    request_text = format_request(data.text)
+
+    bot.debug_log('check_prefix=True')
 
     if bot.get_config('deep_cosplay',data.channel_id) == True:
         bot.debug_log('deep_cosplay_enter')
@@ -147,6 +175,7 @@ async def _(data: Message):
         
         await context.on_message(data)
     else:
+        request_text = format_request(data.text)
         context_id = f'{data.channel_id}-{data.user_id}'
         amiya_answer = await delegate.ask_amiya(request_text,context_id,data.channel_id,True,True,True)
         return Chain(data, reference=True).text(amiya_answer)
