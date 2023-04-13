@@ -1,12 +1,11 @@
 import time
 import random
 import asyncio
-from threading import Timer
 from typing import List
 
 from amiyabot import Message, Chain
-from .ask_chat_gpt import ChatGPTDelegate
-
+from .core.ask_chat_gpt import ChatGPTDelegate
+from .core.chatgpt_plugin_instance import ChatGPTPluginInstance
 
 class ChatGPTMessageContext:
     def __init__(self, data: Message, timestamp: float, user_id: int):
@@ -15,10 +14,10 @@ class ChatGPTMessageContext:
         self.user_id = user_id
 
 
-class DeepCosplay:
-    def __init__(self, delegate:ChatGPTDelegate, channel_id: int) -> None:
+class DeepCosplay():
+    def __init__(self, bot:ChatGPTPluginInstance,delegate:ChatGPTDelegate, channel_id: int) -> None:
+        self.bot = bot
         self.delegate = delegate
-        self.bot = delegate.bot
         self.channel_id = channel_id
 
         self.recent_messages: List[ChatGPTMessageContext] = []
@@ -41,7 +40,7 @@ class DeepCosplay:
         if force:
             self.bot.debug_log(f'force')
             self.topic_messages.append(message_context)
-            await self.send_message(self.ask_amiya([message_context]))
+            await self.send_message(await self.ask_amiya([message_context]))
             self.topic_active = True
             self.topic_users.add(data.user_id)
             self.last_reply_time = time.time()
@@ -64,10 +63,12 @@ class DeepCosplay:
                             
                             self.bot.debug_log(f'check_reply() reply_probability hit')
                             self.topic_messages.append(message_context)
-                            await self.send_message(self.ask_amiya([message_context]))
+                            await self.send_message(await self.ask_amiya([message_context]))
                             self.topic_active = True
                             self.topic_users.add(data.user_id)
                             self.last_reply_time = time.time()
+                    else:
+                        self.bot.debug_log(f'check_reply() message is replyed by human')
 
                 asyncio.create_task(check_reply())
 
@@ -77,7 +78,7 @@ class DeepCosplay:
                     
                     self.bot.debug_log(f'check_reply() check_conversation true')
                     self.topic_messages.extend(messages_in_conversation)
-                    await self.send_message(self.ask_amiya(messages_in_conversation))
+                    await self.send_message(await self.ask_amiya(messages_in_conversation))
                     self.topic_active = True
                     self.topic_users.add(data.user_id)
                     self.last_reply_time = time.time()
@@ -91,7 +92,7 @@ class DeepCosplay:
             if data.user_id in self.topic_users:
                 self.bot.debug_log(f'check_reply() topic_user true')
                 self.topic_messages.append(message_context)
-                await self.send_message(self.ask_amiya(self.topic_messages + [message_context]))
+                await self.send_message(await self.ask_amiya(self.topic_messages + [message_context]))
                 self.last_reply_time = time.time()
 
 
@@ -105,10 +106,15 @@ class DeepCosplay:
         self.recent_messages = [msg for msg in self.recent_messages if time.time() - msg.timestamp <= self.no_reply_timeout]
 
     def is_quoting(self,message_context):
+        if self.bot.get_quote_id(message_context.data) == 0:
+            return False
         return True
 
     # 根据一大堆话生成一个回复
-    def ask_amiya(self, context_list: List[ChatGPTMessageContext]) -> str:
+    async def ask_amiya(self, context_list: List[ChatGPTMessageContext]) -> str:
+
+        request_obj = []
+
         max_chars = 1000
         result = ""
         for i in range(1, len(context_list) + 1):
@@ -117,9 +123,16 @@ class DeepCosplay:
             if len(result) + len(text_to_append) + 1 <= max_chars:
                 # 如果拼接后的长度还没有超过1000个字符，就继续拼接
                 result = text_to_append + "\n" + result
+                request_obj.append({"role": "user", "content": context.data.text_original})
             else:
                 break
-        return "deep_cosplay:"+"\n"+result
+        self.bot.debug_log("deep_cosplay:"+"\n"+result)
+
+        # 第一版先根据上下文给出回答
+        success,response = await self.delegate.ask_chatgpt_raw(request_obj,self.channel_id)
+
+        if success:
+            return response
 
     # 可以判断一个str的列表是否属于同一个话题
     def check_conversation(self, context_list: List[ChatGPTMessageContext]):

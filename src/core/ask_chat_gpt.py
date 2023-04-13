@@ -2,10 +2,9 @@ import openai
 
 from datetime import datetime
 
-from typing import Optional, Tuple, Union
+from typing import Tuple
 from peewee import AutoField,CharField,IntegerField,DateTimeField
 
-from amiyabot import Message
 
 from core import log
 from core.util import run_in_thread_pool
@@ -45,18 +44,6 @@ class ChatGPTDelegate:
     def get_config(self, configName, channel_id=None):
         conf = self.bot.get_config(configName, channel_id)
         return conf
-
-    def get_context(self, context_id):
-        if context_id in self.context_holder.keys():
-            self.bot.debug_log(f'context get :\n{self.context_holder[context_id]}')
-            return self.context_holder[context_id]
-        else:
-            self.bot.debug_log(f'context get : [Null]')
-            return []
-
-    def set_context(self, context_id, context_object):
-        self.bot.debug_log(f'context set :\n{context_object}')
-        self.context_holder[context_id] = context_object
 
     async def ask_chatgpt_raw(self, prompt: list, channel_id: str = None) -> Tuple[bool, str]:
 
@@ -106,52 +93,3 @@ class ChatGPTDelegate:
             total_tokens=int(usage['total_tokens']), exec_time=datetime.now())
 
         return True,f"{text}".strip()
-
-    async def ask_amiya(self, prompt : Union[str, list],context_id : Optional[str] = None, channel_id :str = None, use_friendly_error:bool = True,
-                     use_conext_prefix : bool = True, use_stop_words : bool = True) -> str :
-        self.bot.debug_log(f'{prompt} {context_id} {use_friendly_error} {use_conext_prefix} {use_stop_words}')
-
-        actual_context_id = f'AskAmiya-{context_id}'
-        
-        if actual_context_id in self.user_lock:
-            return "博士，我还在想上一个问题...>.<"
-        self.user_lock.append(actual_context_id)
-
-        request_obj = []
-
-        if context_id is not None:
-            context = self.get_context(actual_context_id)
-            # 尝试确定context
-            if context is not None:
-                request_obj = request_obj + context
-            else:
-                self.clear_context(actual_context_id)
-                if use_conext_prefix:
-                    predef_context = self.get_config('predef_context',channel_id)
-                    if predef_context:
-                        request_obj.extend([{"role": "system", "content": s} for s in predef_context])
-        
-        if isinstance(prompt,str):
-            request_obj.append({"role":"user","content":prompt})
-        
-        if isinstance(prompt,list):
-            for str_prompt in prompt:
-                request_obj.append({"role":"user","content":str_prompt})
-
-        self.bot.debug_log(f'{request_obj}')
-
-        success,response = await self.ask_chatgpt_raw(request_obj,channel_id)
-        
-        self.user_lock.remove(f'AskAmiya-{context_id}')
-        
-        if success:
-            if use_stop_words:
-                stop_words = self.get_config('stop_words')
-                if stop_words:
-                    for sw in self.get_config('stop_words'):
-                        if sw in response :
-                            return "很抱歉博士，但是我不能回答您的这个问题。是否可以请博士换一个问题呢？"
-
-            request_obj.append({"role":'assistant',"content":response})
-            self.set_context(actual_context_id,request_obj)
-            return f"{response}".strip()

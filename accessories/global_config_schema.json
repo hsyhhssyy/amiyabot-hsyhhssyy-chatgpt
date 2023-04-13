@@ -2,7 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    
+    "api_key": {
+      "title":"API Key",
+      "description":"由OpenAI提供给您的ApiKey，没有的话请到https://platform.openai.com/account/api-keys申请。",
+      "type": "string"
+    }, 
     "mode": {
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
@@ -10,7 +14,7 @@
       "enum": ["经典模式", "深度角色扮演"]
     },
     "normal_mode_config": {
-      "title":"常规配置",
+      "title":"经典模式",
       "type": "object",
       "properties": {
         "predef_context": {
@@ -30,7 +34,7 @@
           }
         }
       }
-    }, 
+    },
     "deep_cosplay_mode_config": {
       "type": "object",
       "title":"深度角色扮演",
@@ -63,14 +67,35 @@
         "reply_probability"
       ]
     },
+    "override_other_plugin": {
+      "title":"覆盖其他插件",
+      "description":"开启后将覆盖特定的几个插件的关键词从而保证ChatGPT顺利触发。",
+      "type": "boolean"
+    },
+    "base_url": {
+      "title":"反向代理Url",
+      "description":"可以填写一个Url作为API的基础路径。该url应该以http开头，结尾不包含斜杠，使用时将会拼接为{base_url}/completion",
+      "type": "string"
+    },
+    "proxy": {
+      "title":"http代理",
+      "description":"可选的一个http或https代理，socks代理不支持",
+      "type": "string"
+    },
     "model": {
       "title":"GPT模型",
       "description":"选择要使用的gpt模型",
       "type": "string",
       "enum": ["gpt-3.5-turbo", "gpt-4"]
+    },
+    "show_log": {
+      "title":"调试日志",
+      "description":"开启后将写入用于调试的大量日志。",
+      "type": "boolean"
     }
   },
   "required": [
+    "api_key",
     "model"
   ]
 }
