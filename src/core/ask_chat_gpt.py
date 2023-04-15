@@ -72,12 +72,13 @@ class ChatGPTDelegate:
             )
 
         except openai.error.RateLimitError as e:
+            self.bot.debug_log(f"RateLimitError: {e}")
             return False, "RateLimitError"
         except openai.error.InvalidRequestError as e:
-            log.error(e)
+            self.bot.debug_log(f"InvalidRequestError: {e}")
             return False, "InvalidRequestError"
         except Exception as e:
-            log.error(e)
+            self.bot.debug_log(f"Exception: {e}")
             return False, "UnknownError"
 
         text: str = response['choices'][0]['message']['content']

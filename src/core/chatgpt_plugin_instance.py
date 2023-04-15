@@ -3,12 +3,15 @@ import asyncio
 
 from typing import Optional, Union
 
+from amiyabot.log import LoggerManager
+
 from core import log
 from core.util import read_yaml
 from core.customPluginInstance import AmiyaBotPluginInstance
 
-from ..ask_chat_gpt import ChatGPTDelegate
+from .ask_chat_gpt import ChatGPTDelegate
 
+logger = LoggerManager('ChatGPT')
 
 class ChatGPTPluginInstance(AmiyaBotPluginInstance):
     def install(self):
@@ -25,8 +28,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             os.remove(config_file)
 
     def load(self):
-        loop = asyncio.get_event_loop()
-        loop.create_task(suppress_other_plugin(self))
+        ...
 
     def get_prefix(self):
         return self._prefix_keywords
@@ -34,7 +36,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
     def debug_log(self, message):
         show_log = self.get_config("show_log")
         if show_log == True:
-            log.info(f'[ChatGPT]{message}')
+            logger.info(f'{message}')
 
     def get_quote_id(self, data):
         message = data.message
@@ -56,13 +58,14 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
 
 
 class ChatGPTMessageHandler():
-    def __init__(self, bot:ChatGPTPluginInstance,delegate:ChatGPTDelegate, channel_id,handler_conf_key) -> None:
+    def __init__(self, bot:ChatGPTPluginInstance,delegate:ChatGPTDelegate, channel_id,handler_conf_key,instance=None) -> None:
         self.bot = bot
         self.delegate = delegate
         self.channel_id = channel_id
         self.handler_conf_key = handler_conf_key
+        self.instance = instance
     
-    def get_handler_config(self, configName):
+    def get_handler_config(self, configName, default = None):
         handler_conf = self.bot.get_config(self.handler_conf_key,self.channel_id)
 
         if configName in handler_conf.keys():
@@ -73,8 +76,11 @@ class ChatGPTMessageHandler():
         handler_conf = self.bot.get_config(self.handler_conf_key)
 
         if configName in handler_conf.keys():
-            self.bot.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
-            return handler_conf[configName]
+            if handler_conf[configName] != "" and handler_conf[configName] != []:
+                self.bot.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
+                return handler_conf[configName]
+            else:
+                return default
         
         self.bot.debug_log(f'[GetConfig]{configName} : None')
-        return None
+        return default

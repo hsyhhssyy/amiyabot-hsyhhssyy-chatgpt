@@ -14,9 +14,13 @@
           ]
     },
     "deep_cosplay_mode_config":{
-        "conversation_timeout": 30,
+        "topic_timeout": 30,
+        "topic_reply_probability":0.5,
+        "conversation_probability":0.8,
         "conversation_length":10,
-        "no_reply_timeout":10,
+        "no_reply_timeout":30,
+        "old_message_discard_time":20,
+        "interest_initial":1000.0,
         "reply_probability":0.1
     },
     "override_other_plugin": false,

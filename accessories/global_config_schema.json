@@ -11,7 +11,7 @@
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
       "type": "string",
-      "enum": ["经典模式", "深度角色扮演"]
+      "enum": ["经典模式", "角色扮演"]
     },
     "normal_mode_config": {
       "title":"经典模式",
@@ -37,17 +37,37 @@
     },
     "deep_cosplay_mode_config": {
       "type": "object",
-      "title":"深度角色扮演",
+      "title":"角色扮演",
       "properties": {
-        "conversation_timeout": {
-          "title":"对话超时时间（秒）",
+        "topic_timeout": {
+          "title":"回归静默时间（秒）",
           "description":"当没人和兔兔说话时，要多久兔兔才会回到空闲状态。",
           "type": "integer"
         },
+        "old_message_discard_time": {
+          "title":"遗忘计时器（秒）",
+          "description":"设置多长时间之前的消息会被遗忘。",
+          "type": "integer"
+        },
+        "conversation_probability": {
+          "title":"对话开始几率",
+          "description":"当检测到对话时，兔兔加入对话的几率，范围0.0到1.0",
+          "type": "number"
+        },
         "conversation_length": {
           "title":"对话长度",
-          "description":"兔兔每次回复时，参与判断的上下文长度，越短调用API的频率越高。",
+          "description":"当没有被遗忘的消息达到多少条时，尝试判断并决定加入对话，越短调用API的频率越高。",
           "type": "integer"
+        },
+        "topic_reply_probability": {
+          "title":"对话参与几率",
+          "description":"在对话中，兔兔回复对话参与者内容的几率，范围0.0到1.0",
+          "type": "number"
+        },
+        "interest_initial": {
+          "title":"初始兴趣",
+          "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔让他不要一直接茬。",
+          "type": "number"
         },
         "no_reply_timeout": {
           "title":"暖场计时器（秒）",
@@ -59,13 +79,7 @@
           "description":"兔兔触发暖场的几率，范围0.0到1.0",
           "type": "number"
         }
-      },
-      "required": [
-        "conversation_timeout",
-        "conversation_length",
-        "no_reply_timeout",
-        "reply_probability"
-      ]
+      }
     },
     "override_other_plugin": {
       "title":"覆盖其他插件",

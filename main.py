@@ -17,7 +17,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='2.7',
+    version='2.7.2',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -89,11 +89,11 @@ async def _(data: Message):
 
     request_text = format_request(data.text)
 
-    if mode == "深度角色扮演":
+    if mode == "角色扮演":
         try:
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, DeepCosplay):
-                context = DeepCosplay(bot,delegate,data.channel_id)
+                context = DeepCosplay(bot,delegate,data.channel_id,data.instance)
                 channel_hander_context[data.channel_id] = context
         except Exception as e:
             log.error(e)
