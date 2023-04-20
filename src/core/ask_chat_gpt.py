@@ -88,6 +88,7 @@ class ChatGPTDelegate:
         usage = response['usage']
 
         AmiyaBotHsyhhssyyChatgptTokenConsumeModel.create(
+            plugin_id="-",json_config="-",version="-",
             channel_id=channel_id, model_name=model, exec_id=id,
             prompt_tokens=int(usage['prompt_tokens']),
             completion_tokens=int(usage['completion_tokens']),
