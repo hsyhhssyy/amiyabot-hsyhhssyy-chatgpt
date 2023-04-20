@@ -38,7 +38,7 @@ class AskAmiya(ChatGPTMessageHandler):
         if actual_context_id in self.user_lock:
             return "博士，我还在想上一个问题...>.<"
         self.user_lock.append(actual_context_id)
-
+        
         request_obj = []
 
         if context_id is not None:
@@ -82,5 +82,9 @@ class AskAmiya(ChatGPTMessageHandler):
         context_id = f'{data.channel_id}-{data.user_id}'
         if self.bot.get_quote_id(data) == 0:
             self.clear_context(context_id)
+        
+        if self.get_handler_config("amiya_thinking",True) == True:
+            await data.send(Chain(data).text('阿米娅思考中'))
+
         amiya_answer = await self.ask_amiya(request_text,context_id,data.channel_id,True,True,True)
         await data.send(Chain(data, reference=True).text(amiya_answer))

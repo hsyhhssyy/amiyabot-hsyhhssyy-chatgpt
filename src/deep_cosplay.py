@@ -65,7 +65,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         if force:
             self.bot.debug_log(f'force')
             self.new_topic([message_context])
-            await self.send_message(await self.ask_amiya([message_context]))
+            await self.ask_amiya([message_context])
             return
 
         if not self.topic_active:
@@ -79,7 +79,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                         self.bot.debug_log(
                             f'确定加入对话')
                         self.new_topic(messages_in_conversation)
-                        await self.send_message(await self.ask_amiya_with_queue(messages_in_conversation))
+                        await self.ask_amiya_with_queue(messages_in_conversation)
                 else:
                     self.recent_messages = self.recent_messages[-int(
                         float(self.get_handler_config("conversation_length", 10))/2):]
@@ -102,7 +102,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                             self.bot.debug_log(
                                 f'冷场判定成功')
                             self.new_topic([message_context])
-                            await self.send_message(await self.ask_amiya_with_queue([message_context]))
+                            await self.ask_amiya_with_queue([message_context])
                     else:
                         self.bot.debug_log(
                             f'该条消息已被真人回复')
@@ -124,7 +124,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 if random.random() < float(self.get_handler_config('topic_reply_probability', 0.1)):   
                     self.bot.debug_log(f'概率命中，将产生一条Topic回复')
                     self.topic_messages.append(message_context)
-                    await self.send_message(await self.ask_amiya_with_queue([message_context]))
+                    await self.ask_amiya_with_queue([message_context])
                     self.last_reply_time = time.time()
                 else:
                     self.bot.debug_log(f'概率未命中，但增加50兴趣')
@@ -184,27 +184,11 @@ class DeepCosplay(ChatGPTMessageHandler):
         self.bot.debug_log(f'当前Amiya记忆字符串: {memory_str}')
         command = command.replace("<<MEMORY>>", memory_str)
 
-        success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], self.channel_id)
 
-        self.bot.debug_log(f'ChatGPT原始回复:{response}')
-
-        json_objects = extract_json(response)
-
-        cut_response = None
-        for json_obj in json_objects:
-            if json_obj.get('role', None) == '阿米娅':
-                cut_response = json_obj.get('reply', None)
-                break
+        _ , message_send = await self.get_amiya_response(command, self.channel_id)
 
         self.amiya_memory.extend(memory_to_add)
-
         self.bot.debug_log(f'memory:{self.amiya_memory}')
-
-        if success and cut_response is not None:
-            amiya_context = ChatGPTMessageContext(cut_response, '阿米娅')
-        else:
-            amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
-
 
         interest_decrease = random.randint(1, 100)
 
@@ -213,19 +197,70 @@ class DeepCosplay(ChatGPTMessageHandler):
             if previou_msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID:
                 time = previou_msg.timestamp
 
-        interest_factor = calculate_timestamp_factor(time,amiya_context.timestamp)
+        for amiya_context in message_send:
+            interest_factor = calculate_timestamp_factor(time,amiya_context.timestamp)
 
-        self.interest = self.interest -interest_decrease * interest_factor
-        self.bot.debug_log(f'兴趣变化{self.interest} -= {interest_decrease} * {interest_factor}')
+            self.interest = self.interest -interest_decrease * interest_factor
+            self.bot.debug_log(f'兴趣变化{self.interest} -= {interest_decrease} * {interest_factor}')
 
-        if self.interest <0 :
-            self.bot.debug_log(f'兴趣耗尽')
-            self.close_topic()
+            if self.interest <0 :
+                self.bot.debug_log(f'兴趣耗尽')
+                self.close_topic()
+                    
+            self.amiya_memory.append(amiya_context)
+            self.recent_messages.append(amiya_context)
+
+        return True
+
+    async def get_amiya_response(self, command: str, channel_id: str, max_retries: int = 3) -> Tuple[bool, str]:
+        retry_count = 0
+        message_send = []
+
         
+        successful_sent = False
         
-        self.amiya_memory.append(amiya_context)
-        self.recent_messages.append(amiya_context)
-        return amiya_context.text
+        while retry_count < max_retries:
+            success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
+
+            self.bot.debug_log(f'ChatGPT原始回复:{response}')
+
+            json_objects = extract_json(response)
+
+
+            cut_response = None
+            for json_obj in json_objects:
+                if json_obj.get('role', None) == '阿米娅':
+                    cut_response = json_obj.get('reply', None)
+                    if self.get_handler_config('output_mental', False) == True:
+                        mental = json_obj.get('mental', None)
+                        if mental is not None and mental != "":
+                            cut_response = f'({mental})\n{cut_response}'
+
+                    amiya_context = ChatGPTMessageContext(cut_response, '阿米娅')
+                    await self.send_message(cut_response)
+                    message_send.append(amiya_context)
+                    successful_sent = True
+
+                    activity = json_obj.get('activity', None)
+
+                    if activity is not None and activity != "":
+                        await self.send_message(activity)
+
+            if successful_sent:
+                break
+            else:
+                self.bot.debug_log(f'未读到Json，重试第{retry_count+1}次')
+                retry_count += 1
+
+        if not successful_sent:
+            # 如果重试次数用完仍然没有成功，返回错误信息
+            amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
+            await self.send_message(amiya_context)
+            message_send.append(amiya_context)
+            return False, message_send
+
+        return True, message_send
+
 
     async def ask_amiya_with_queue(self,  message_context_list: List[ChatGPTMessageContext]):
         self._queued_messages.extend(message_context_list)
@@ -236,7 +271,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             while self._queued_messages:
                 messages_to_process = self._queued_messages.copy()
                 self._queued_messages.clear()
-                await self.send_message(await self.ask_amiya(messages_to_process))
+                await self.ask_amiya(messages_to_process)
 
             self._ask_amiya_in_progress = False
 

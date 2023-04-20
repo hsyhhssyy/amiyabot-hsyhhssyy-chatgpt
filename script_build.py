@@ -2,7 +2,7 @@ import sys
 import os
 import re
 
-amiya_bot_plugin_path = "../../amiya-bot-v6/plugins"
+amiya_bot_plugin_path = "/mnt/amiya-bot/plugins"
 
 if len(sys.argv)<2:
     print("请使用build或者test命令")
@@ -48,10 +48,30 @@ if cmd=="build":
     os.system(f'rm {plugin_id}-*.zip')
     os.system(f'zip -q -r {plugin_id}-{version}.zip *')
 else:
-    os.system(f'rm {plugin_id}-*.zip')
+    os.system(f'sudo rm {plugin_id}-*.zip')
     os.system(f'zip -q -r {plugin_id}-{version}.zip *')
-    os.system(f'rm -rf {amiya_bot_plugin_path}/{plugin_id}-*')
+    os.system(f'sudo rm -rf {amiya_bot_plugin_path}/{plugin_id}-*')
     os.system(f'cp {plugin_id}-*.zip {amiya_bot_plugin_path}/')
-    os.system(f'docker restart amiya-bot')
+
+    # 如果您是docker请用这一句
+    # os.system(f'docker restart amiya-bot')
+
+    # 下面这句是在kubernetes下，重新创建指定dep下的所有pod
+    app_name = "amiya-bot"
+    namespace_name = "amiya-bot"
+
+    # 获取指定Deployment的所有Pod
+    get_pods_command = f"kubectl get pods -l app={app_name} -n {namespace_name} -o jsonpath='{{.items[*].metadata.name}}'"
+
+    # 使用os.system执行命令并获取所有Pod的名称
+    pods = os.popen(get_pods_command).read().split()
+
+    # 遍历Pod列表并删除每个Pod
+    for pod in pods:
+        delete_pod_command = f"kubectl delete pod -n {namespace_name} {pod}"
+        os.system(delete_pod_command)
+        print(f"Deleted pod: {pod}")
+
+    print("All pods have been deleted. Kubernetes will recreate the pods.")
     
 

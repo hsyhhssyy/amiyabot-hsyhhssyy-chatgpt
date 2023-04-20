@@ -17,7 +17,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='2.7.2',
+    version='3.0.0',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -36,9 +36,9 @@ def load(self):
     loop = asyncio.get_event_loop()
     loop.create_task(suppress_other_plugin(self))
 
-async def ask_amiya(self, prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
+async def ask_amiya(prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
-    temp_amiya = AskAmiya(bot,delegate)
+    temp_amiya = AskAmiya(bot,delegate,None)
     return await temp_amiya.ask_amiya(prompt,context_id,None,use_friendly_error,use_conext_prefix,use_stop_words)
     
 bot.ask_amiya = ask_amiya

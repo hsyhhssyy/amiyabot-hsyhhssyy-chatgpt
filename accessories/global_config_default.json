@@ -11,7 +11,8 @@
             "作为人工智能机器人",
             "人工智能助手",
             "智能助手"
-          ]
+          ],
+          "amiya_thinking":true
     },
     "deep_cosplay_mode_config":{
         "topic_timeout": 30,
@@ -21,7 +22,8 @@
         "no_reply_timeout":30,
         "old_message_discard_time":20,
         "interest_initial":1000.0,
-        "reply_probability":0.1
+        "reply_probability":0.1,
+        "output_mental":false
     },
     "override_other_plugin": false,
     "base_url": "https://api.openai.com/v1",
