@@ -84,9 +84,19 @@
           "description":"兔兔触发暖场的几率，范围0.0到1.0",
           "type": "number"
         },
+        "max_retries": {
+          "title":"重试次数",
+          "description":"ChatGPT返回的格式不符合要求时的最大尝试次数，到达次数还不行则会返回“抱歉博士，阿米娅有点不明白。”",
+          "type": "integer"
+        },
         "output_mental": {
           "title":"输出情绪",
           "description":"用括号输出兔兔的情绪",
+          "type": "boolean"
+        },
+        "output_activity": {
+          "title":"输出行为",
+          "description":"用括号输出兔兔的行为",
           "type": "boolean"
         }
       }

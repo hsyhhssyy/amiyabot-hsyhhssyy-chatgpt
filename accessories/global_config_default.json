@@ -23,7 +23,9 @@
         "old_message_discard_time":20,
         "interest_initial":1000.0,
         "reply_probability":0.1,
-        "output_mental":false
+        "max_retries":3,
+        "output_mental":false,
+        "output_activity":false
     },
     "override_other_plugin": false,
     "base_url": "https://api.openai.com/v1",

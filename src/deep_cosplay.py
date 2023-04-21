@@ -212,52 +212,69 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return True
 
-    async def get_amiya_response(self, command: str, channel_id: str, max_retries: int = 3) -> Tuple[bool, str]:
-        retry_count = 0
+    async def get_amiya_response(self, command: str, channel_id: str) -> Tuple[bool, str]:
+        max_retries = int(self.get_handler_config('max_retries', 3))
+
+        if max_retries < 1:
+            max_retries = 3
+        
+        retry_count = 0 
+
+        self.bot.debug_log(f'ChatGPT Max Retry: {max_retries}')
+
         message_send = []
 
+        try:
         
-        successful_sent = False
-        
-        while retry_count < max_retries:
-            success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
+            successful_sent = False
+            
+            while retry_count < max_retries:
+                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
 
-            self.bot.debug_log(f'ChatGPT原始回复:{response}')
+                self.bot.debug_log(f'ChatGPT原始回复:{response}')
 
-            json_objects = extract_json(response)
+                json_objects = extract_json(response)
 
 
-            cut_response = None
-            for json_obj in json_objects:
-                if json_obj.get('role', None) == '阿米娅':
-                    cut_response = json_obj.get('reply', None)
-                    if self.get_handler_config('output_mental', False) == True:
-                        mental = json_obj.get('mental', None)
-                        if mental is not None and mental != "":
-                            cut_response = f'({mental})\n{cut_response}'
+                cut_response = None
+                for json_obj in json_objects:
+                    if json_obj.get('role', None) == '阿米娅':
+                        cut_response = json_obj.get('reply', None)
+                        if self.get_handler_config('output_mental', False) == True:
+                            mental = json_obj.get('mental', None)
+                            if mental is not None and mental != "":
+                                cut_response = f'({mental})\n{cut_response}'
 
-                    amiya_context = ChatGPTMessageContext(cut_response, '阿米娅')
-                    await self.send_message(cut_response)
-                    message_send.append(amiya_context)
-                    successful_sent = True
+                        amiya_context = ChatGPTMessageContext(cut_response, '阿米娅')
+                        await self.send_message(cut_response)
+                        message_send.append(amiya_context)
+                        successful_sent = True
 
-                    activity = json_obj.get('activity', None)
+                        if self.get_handler_config('output_activity', False) == True:
+                            activity = json_obj.get('activity', None)
+                            if activity is not None and activity != "":
+                                await self.send_message(f'({activity})')
 
-                    if activity is not None and activity != "":
-                        await self.send_message(activity)
+                if successful_sent:
+                    break
+                else:
+                    self.bot.debug_log(f'未读到Json，重试第{retry_count+1}次')
+                    retry_count += 1
 
-            if successful_sent:
-                break
-            else:
-                self.bot.debug_log(f'未读到Json，重试第{retry_count+1}次')
-                retry_count += 1
+            if not successful_sent:
+                # 如果重试次数用完仍然没有成功，返回错误信息
+                amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
+                await self.send_message('抱歉博士，阿米娅有点不明白。')
+                message_send.append(amiya_context)
+                return False, message_send
 
-        if not successful_sent:
+        except Exception as e:
             # 如果重试次数用完仍然没有成功，返回错误信息
-            amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
-            await self.send_message(amiya_context)
-            message_send.append(amiya_context)
-            return False, message_send
+                self.bot.debug_log(f'Unknown Error {e}')
+                amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
+                await self.send_message('抱歉博士，阿米娅有点不明白。')
+                message_send.append(amiya_context)
+                return False, message_send
 
         return True, message_send
 

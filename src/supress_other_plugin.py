@@ -16,6 +16,7 @@ class OtherPluginSuppressor:
             log.info(message)
 
     async def multi_keyword_verify(self,data: Message, keywords:list, level):
+        self.debug_log(f"Suppressed multi_keyword_verify Handler Call keywords = {keywords}")
         if all(substring in data.text for substring in keywords):
             self.debug_log(f"命中新的Handler level = {level}")
             return True, level
@@ -25,6 +26,9 @@ class OtherPluginSuppressor:
         return lambda data: self.equal_verify(data, keywords, level)
 
     async def keyword_before_func_verify(self, data: Message, keywords:list, func):
+        
+        self.debug_log(f"Suppressed keyword_before_func_verify Handler Call keywords = {keywords}")
+
         if any(substring in data.text for substring in keywords):
             self.debug_log(f"命中新的Handler for:{data.text}")
             try:
