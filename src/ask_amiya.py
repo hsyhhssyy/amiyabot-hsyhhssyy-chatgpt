@@ -86,5 +86,9 @@ class AskAmiya(ChatGPTMessageHandler):
         if self.get_handler_config("amiya_thinking",True) == True:
             await data.send(Chain(data).text('阿米娅思考中'))
 
-        amiya_answer = await self.ask_amiya(request_text,context_id,data.channel_id,True,True,True)
+        channel_id = data.channel_id
+        if channel_id is None:
+            channel_id = f"User:{data.user_id}"
+
+        amiya_answer = await self.ask_amiya(request_text,context_id,channel_id,True,True,True)
         await data.send(Chain(data, reference=True).text(amiya_answer))

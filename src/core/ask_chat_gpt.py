@@ -45,9 +45,7 @@ class ChatGPTDelegate:
         conf = self.bot.get_config(configName, channel_id)
         return conf
 
-    async def ask_chatgpt_raw(self, prompt: list, channel_id: str = None) -> Tuple[bool, str]:
-
-        self.bot.debug_log(f'ask_chatgpt_raw: {prompt}')
+    async def ask_chatgpt_raw(self, prompt: list, channel_id: str = None, model:str = None) -> Tuple[bool, str]:
 
         openai.api_key = self.get_config('api_key', channel_id)
 
@@ -63,14 +61,17 @@ class ChatGPTDelegate:
 
         response = None
 
-        model = self.get_config('model', channel_id) or "gpt-3.5-turbo"
+        if model is None:
+            model = self.get_config('model', channel_id) or "gpt-3.5-turbo"
+
+        combined_message = ''.join(obj['content'] for obj in prompt)
 
         try:
             response = await run_in_thread_pool(
                 openai.ChatCompletion.create,
                 **{'model': model, 'messages': prompt}
             )
-
+            
         except openai.error.RateLimitError as e:
             self.bot.debug_log(f"RateLimitError: {e}")
             return False, "RateLimitError"
@@ -83,9 +84,17 @@ class ChatGPTDelegate:
 
         text: str = response['choices'][0]['message']['content']
         role: str = response['choices'][0]['message']['role']
+        
+        self.bot.debug_log(f'Chatgpt Raw: \n{combined_message}\n------------------------\n{text}')
 
         id = response['id']
         usage = response['usage']
+
+        if channel_id is None:
+            channel_id = "-"
+
+        if model is None:
+            model = "-"
 
         AmiyaBotHsyhhssyyChatgptTokenConsumeModel.create(
             plugin_id="-",json_config="-",version="-",

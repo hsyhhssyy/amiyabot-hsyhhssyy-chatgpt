@@ -3,7 +3,7 @@ import asyncio
 
 from typing import Optional, Union
 
-from amiyabot import Message
+from amiyabot import Message,Chain
 
 from core import log
 
@@ -17,7 +17,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.0.2',
+    version='3.0.9',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -32,9 +32,10 @@ delegate = ChatGPTDelegate()
 delegate.bot = bot
 
 
-def load(self):
+def load():
+    bot.debug_log(f"ChatGPT Plugin Change Other Handler1：{bot.get_config('override_other_plugin')}")
     loop = asyncio.get_event_loop()
-    loop.create_task(suppress_other_plugin(self))
+    loop.create_task(suppress_other_plugin(bot))
 
 async def ask_amiya(prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
@@ -66,14 +67,29 @@ def format_request(text):
     return text
 
 async def check_talk(data: Message):
+    
+    # 临时排除纯阿拉伯数字的消息，等待兔妈修复
+    if data.text.isdigit():
+        return False,0
+
     if 'chat' in data.text.lower():
         return True, 10
-    return True, -1
+        
+    if data.text.upper().startswith("CHATGPT请问"):
+        return True, 10
+    
+    return True, -99999
 
 prefix = ['阿米娅', '阿米兔', '兔兔', '兔子', '小兔子', 'Amiya', 'amiya']
 
 @bot.on_message(verify=check_talk,check_prefix=False,allow_direct=True)
 async def _(data: Message):
+# @bot.message_before_handle
+# async def _(data: Message, factory_name: str, instance):
+    # bot.debug_log(f'[ChatGPT]factory_name{factory_name}')
+    #if factory_name is not None:
+    #    return True
+
     if not data.text:
         return
 
@@ -87,9 +103,15 @@ async def _(data: Message):
     if data.text_original.startswith(tuple(prefix)):
         prefixed_call = True
 
-    request_text = format_request(data.text)
+    request_text = format_request(data.text_original)
 
-    if mode == "角色扮演":
+    if request_text.upper().startswith("CHATGPT请问"):
+        success, raw_answer = await delegate.ask_chatgpt_raw([{"role": "user", "content":data.text}])
+        if success:
+            return Chain(data).text(raw_answer)
+        else:
+            return Chain(data).text(raw_answer)
+    elif mode == "角色扮演" and data.channel_id is not None:
         try:
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, DeepCosplay):
@@ -101,7 +123,7 @@ async def _(data: Message):
 
         await context.on_message(data,prefixed_call)
     else:
-        if prefixed_call:
+        if prefixed_call or data.channel_id is None:
             try:
                 context = channel_hander_context.get(data.channel_id)
                 if context is None or not isinstance(context, AskAmiya):
@@ -112,3 +134,5 @@ async def _(data: Message):
                 return
 
             await context.on_message(data,request_text,prefixed_call)
+
+    return

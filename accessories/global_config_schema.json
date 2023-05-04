@@ -98,6 +98,11 @@
           "title":"输出行为",
           "description":"用括号输出兔兔的行为",
           "type": "boolean"
+        },
+        "show_log_in_chat": {
+          "title":"在对话中调试",
+          "description":"开启后将会在兔兔的输出中直接出现调试信息。",
+          "type": "boolean"
         }
       }
     },

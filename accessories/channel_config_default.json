@@ -26,7 +26,8 @@
         "output_mental":false,
         "output_activity":false
     },
-    "model": "gpt-3.5-turbo"
+    "model": "gpt-3.5-turbo",
+    "show_log_in_chat": false
     
   }
   
