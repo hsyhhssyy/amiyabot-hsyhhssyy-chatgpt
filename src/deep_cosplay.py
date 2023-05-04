@@ -23,7 +23,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         self.recent_messages: List[ChatGPTMessageContext] = []
 
-        self.last_call_time = 0
+        self.last_true_time = 0
 
         self._ask_amiya_in_progress = False
         self.topic_active = False
@@ -72,17 +72,23 @@ class DeepCosplay(ChatGPTMessageHandler):
             await asyncio.sleep(5)  # 每5秒输出一次平均数
 
     def get_reply_probability(self, mean_time:int = 30):
-        mean = (time_50_percent + time_100_percent) / 2
-        std_dev = (time_100_percent - time_50_percent) / (2 * math.erf(1 / math.sqrt(2)))
-        time_interval = time.time() - self.last_call_time
-        self.last_call_time = time.time()
-        x = time_interval / 60
-        z = (x - mean) / std_dev
-        p = 0.5 * (1 + math.erf(z / math.sqrt(2)))
-        pdf = 1 / (std_dev * math.sqrt(2 * math.pi)) * math.exp(-0.5 * ((x - mean) / std_dev) ** 2)
-
-        # 最后总体乘上一个配置项Factor
-        return pdf * 0.5
+        p = 0.1  # 初始概率为0.1
+        self.last_true_time = time.time()  # 上一次返回True的时间
+        while True:
+            if random.random() < p:
+                # 返回True
+                now = time.time()
+                interval = now - self.last_true_time
+                if interval < mean_time:
+                    while time.time() - now < mean_time - interval:
+                        yield False
+                self.last_true_time = time.time()
+                p = max(0.1, p - 0.01)  # 每次返回True后概率降低，但不低于0.1
+                yield True
+            else:
+                # 返回False
+                p = min(0.9, p + 0.01)  # 每次返回False后概率升高，但不高于0.9
+                yield False
 
     def new_topic(self, messages_in_conversation = None,topic = None):
         
