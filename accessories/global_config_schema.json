@@ -49,26 +49,6 @@
           "description":"当没人和兔兔说话时，要多久兔兔才会回到空闲状态。",
           "type": "integer"
         },
-        "old_message_discard_time": {
-          "title":"遗忘计时器（秒）",
-          "description":"设置多长时间之前的消息会被遗忘。",
-          "type": "integer"
-        },
-        "conversation_probability": {
-          "title":"对话开始几率",
-          "description":"当检测到对话时，兔兔加入对话的几率，范围0.0到1.0",
-          "type": "number"
-        },
-        "conversation_length": {
-          "title":"对话长度",
-          "description":"当没有被遗忘的消息达到多少条时，尝试判断并决定加入对话，越短调用API的频率越高。",
-          "type": "integer"
-        },
-        "topic_reply_probability": {
-          "title":"对话参与几率",
-          "description":"在对话中，兔兔回复对话参与者内容的几率，范围0.0到1.0",
-          "type": "number"
-        },
         "interest_initial": {
           "title":"初始兴趣",
           "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔让他不要一直接茬。",
@@ -76,7 +56,7 @@
         },
         "no_reply_timeout": {
           "title":"暖场计时器（秒）",
-          "description":"当群内有多长时间没人说话时，兔兔会接一句话。",
+          "description":"当群内有多长时间没人说话时，兔兔会概率接一句话。",
           "type": "integer"
         },
         "reply_probability": {

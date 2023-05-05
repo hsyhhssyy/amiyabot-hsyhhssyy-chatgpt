@@ -12,6 +12,8 @@ from amiyabot import Message, Chain
 from .core.ask_chat_gpt import ChatGPTDelegate
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance,ChatGPTMessageHandler
 from .core.message_context import ChatGPTMessageContext
+from .core.chat_log_storage import ChatLogStorage
+
 from .util.string_operation import extract_json
 from .util.datetime_operation import calculate_timestamp_factor
 
@@ -20,6 +22,8 @@ curr_dir = os.path.dirname(__file__)
 class DeepCosplay(ChatGPTMessageHandler):
     def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id: int,instance) -> None:
         super().__init__(bot, delegate, channel_id, "deep_cosplay_mode_config",instance)
+
+        self.storage = ChatLogStorage()
 
         self.recent_messages: List[ChatGPTMessageContext] = []
         self.traceable_timestamp = time.time()
@@ -41,29 +45,6 @@ class DeepCosplay(ChatGPTMessageHandler):
         self.interest : float = 0
         asyncio.create_task(self.calculate_average())
     
-    def get_formatted_config(self,config_name):
-
-        if config_name == "topic_reply_probability":
-            return float(self.get_handler_config('topic_reply_probability',0.1))
-
-        if config_name == "old_message_discard_time":
-            return int(self.get_handler_config('old_message_discard_time',60))
-        
-        if config_name == "conversation_length":
-            if self.average_message_in_60_sec >20:
-                self.bot.debug_log(f'当前的平均对话长度值:20(默认值)')
-                return 20
-            elif self.average_message_in_60_sec >5:
-                self.bot.debug_log(f'当前的平均对话长度值:{self.average_message_in_60_sec}')
-                return int(self.average_message_in_60_sec)
-            else:
-                self.bot.debug_log(f'当前的平均对话长度值:5(默认值)')
-                return 5
-
-        self.bot.debug_log(f'代码错误！读取了未配置的变量{config_name}')
-
-        return self.get_handler_config(config_name)
-
     async def calculate_average(self):
         while True:
             start_time = time.time()
@@ -76,7 +57,13 @@ class DeepCosplay(ChatGPTMessageHandler):
             self.average_message_in_60_sec = average
             await asyncio.sleep(5)  # 每5秒输出一次平均数
 
-    def get_reply_probability(self, mean_time:int = 120):
+    def get_reply_probability(self):
+
+        mean_time = 120 - 5 * self.average_message_in_60_sec 
+
+        if mean_time < 30:
+            mean_time = 30
+
         current_time = time.time()
         time_elapsed = current_time - self.last_true_time
         probability = 1 - ((1 - 1/mean_time) ** time_elapsed)
@@ -157,7 +144,6 @@ class DeepCosplay(ChatGPTMessageHandler):
             conversation_length = 5
 
         if not self.topic_active:
-
             if force:
                 self.bot.debug_log(f'force')
                 messages_in_conversation = self.recent_messages[0-conversation_length:]
@@ -417,22 +403,25 @@ class DeepCosplay(ChatGPTMessageHandler):
         if not self._ask_amiya_in_progress:
             self._ask_amiya_in_progress = True
 
-            while self._queued_messages:
-                messages_to_process = self._queued_messages.copy()
-                self._queued_messages.clear()
+            try:
 
-                if not force:
-                    probability = self.get_reply_probability()
+                while self._queued_messages:
+                    messages_to_process = self._queued_messages.copy()
+                    self._queued_messages.clear()
+
+                    if not force:
+                        probability = self.get_reply_probability()
+                            
+                        if  not probability:
+                            self.bot.debug_log(f'ask_amiya_with_queue丢弃{len(messages_to_process)}条消息，因为太近了')
+                            self.interest = self.interest + 50 * (1- probability)
+                            return False
                         
-                    if  not probability:
-                        self.bot.debug_log(f'ask_amiya_with_queue丢弃{len(messages_to_process)}条消息，因为太近了')
-                        self.interest = self.interest + 50 * (1- probability)
-                        return False
-                    
-                self.bot.debug_log(f'ask_amiya_with_queue准备对{len(messages_to_process)}条消息进行处理')
-                await self.ask_amiya(messages_to_process)
+                    self.bot.debug_log(f'ask_amiya_with_queue准备对{len(messages_to_process)}条消息进行处理')
+                    await self.ask_amiya(messages_to_process)
 
-            self._ask_amiya_in_progress = False
+            finally:
+                self._ask_amiya_in_progress = False
         else:
             self.bot.debug_log(f'ask_amiya_with_queue 正忙，消息已被延后处理')
 
