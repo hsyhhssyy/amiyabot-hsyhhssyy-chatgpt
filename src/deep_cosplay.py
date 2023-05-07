@@ -23,95 +23,55 @@ class DeepCosplay(ChatGPTMessageHandler):
     def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id: int,instance) -> None:
         super().__init__(bot, delegate, channel_id, "deep_cosplay_mode_config",instance)
 
-        self.storage = ChatLogStorage()
+        self.storage = ChatLogStorage(bot,delegate,self.channel_id)
 
-        self.recent_messages: List[ChatGPTMessageContext] = []
-        self.traceable_timestamp = time.time()
-
-        self.last_true_time = time.time()
-        self.consecutive_false_count = 0
-
-        self._ask_amiya_in_progress = False
-        self.topic_active = False
-        self.topic = ""
-        self.average_message_in_60_sec = 5
-        self.topic_users = set()
-        self.last_reply_time = time.time()
-        self.topic_messages : List[ChatGPTMessageContext] = []
-
-        self.amiya_memory : List[ChatGPTMessageContext] = []
-        self._queued_messages : List[ChatGPTMessageContext] = []
-
+        self.amiya_topic = ""
         self.interest : float = 0
-        asyncio.create_task(self.calculate_average())
-    
-    async def calculate_average(self):
+
+        self.reply_check = self.__reply_check_gen()
+
+        asyncio.create_task(self.__amiya_loop())
+
+    def __reply_check_gen(self):
+
+        last_true_time = time.time()
+        consecutive_false_count = 0
+
         while True:
-            start_time = time.time()
-            end_time = start_time + 60
-            total_items = 0
-            while time.time() < end_time:
-                total_items += len(self.recent_messages)
-                await asyncio.sleep(0.1)
-            average = total_items / 60
-            self.average_message_in_60_sec = average
-            await asyncio.sleep(5)  # 每5秒输出一次平均数
+            
+            try:
 
-    def get_reply_probability(self):
+                mean_time = self.storage.mediua_freq         
+                if mean_time < 30:
+                    mean_time = 30
 
-        mean_time = 120 - 5 * self.average_message_in_60_sec 
+                current_time = time.time()
+                time_elapsed = current_time - last_true_time
+                probability = 1 - ((1 - 1/mean_time) ** time_elapsed)
 
-        if mean_time < 30:
-            mean_time = 30
+                # 如果当前没有话题，则几率折半
+                if self.storage.topic is None:
+                    probability = probability * 0.5
+                            
+                # 如果当前兴趣丢失，则概率归零
+                if self.interest <= 0:
+                    probability = 0
 
-        current_time = time.time()
-        time_elapsed = current_time - self.last_true_time
-        probability = 1 - ((1 - 1/mean_time) ** time_elapsed)
+                rand_value = random.random()
 
-        probability = probability * 0.5
-
-        rand_value = random.random()
-        self.bot.debug_log(f'get_reply_probability:{time_elapsed}s - {rand_value} < {probability} ?')
-        if rand_value < probability:
-            self.last_true_time = current_time
-            self.consecutive_false_count = 0
-            return True
-        else:
-            self.consecutive_false_count += 1
-            return False
-
-    def traceable_messages(self) -> List[ChatGPTMessageContext]:
-        result = []
-        for context in self.recent_messages:
-            if context.timestamp > self.traceable_timestamp:
-                result.append(context)
-        return result
-
-    def new_topic(self, messages_in_conversation = None,topic = None):
-        
-        if self.topic_active == False:
-            self.bot.debug_log(f'创建新话题')
-            self.topic_active = True
-            self.amiya_memory = []
-            self.interest = float(self.get_handler_config('interest_initial',1000.0))
-        
-        if messages_in_conversation is not None:
-            self.topic_messages.extend(messages_in_conversation)
-            for mess in messages_in_conversation:
-                if mess.user_id not in self.topic_users:
-                    self.topic_users.add(mess.user_id)
-        
-        if topic is None:
-            self.topic = ""
-        else:
-            self.topic = topic
-
-    def close_topic(self):
-        self.bot.debug_log(f'话题结束')
-        self.topic_active = False
-        self.topic_users.clear()
-        self.amiya_memory.clear()
-        self.recent_messages = [self.recent_messages[-1]]
+                self.bot.debug_log(f'{time_elapsed}/{mean_time} 秒间隔后的说话概率 : {rand_value} < {probability} ?')
+                    
+                if rand_value < probability:
+                    last_true_time = current_time
+                    consecutive_false_count = 0
+                    yield True
+                else:
+                    consecutive_false_count += 1
+                    yield False
+            
+            except Exception as e:
+                # 如果重试次数用完仍然没有成功，返回错误信息
+                self.bot.debug_log(f'Unknown Error {e}')
 
     def load_template(self,template_name:str):
 
@@ -129,89 +89,56 @@ class DeepCosplay(ChatGPTMessageHandler):
         return content
 
     async def on_message(self, data: Message, force: bool = False):
-        message_context = ChatGPTMessageContext.from_message(data)
-        self.recent_messages.append(message_context)
-        traceable_message_list = self.traceable_messages()
+        self.storage.enqueue(data)
 
-        if self.average_message_in_60_sec >20:
-            self.bot.debug_log(f'当前的平均对话长度值:20(默认最大值)')
-            conversation_length = 20
-        elif self.average_message_in_60_sec >5:
-            self.bot.debug_log(f'当前的平均对话长度值:{self.average_message_in_60_sec}')
-            conversation_length = int(self.average_message_in_60_sec)
-        else:
-            self.bot.debug_log(f'当前的平均对话长度值:5(默认最小值)')
-            conversation_length = 5
+    async def __amiya_loop(self):
 
-        if not self.topic_active:
-            if force:
-                self.bot.debug_log(f'force')
-                messages_in_conversation = self.recent_messages[0-conversation_length:]
-                _,topic = await self.check_conversation(messages_in_conversation)
-                self.new_topic([message_context],topic)
-                await self.ask_amiya_with_queue([message_context],True)
-            else:
-                self.bot.debug_log(f'当前未过时消息的长度是: {len(traceable_message_list)}')
-                if len(traceable_message_list) >= conversation_length:
-                    messages_in_conversation = traceable_message_list[0-conversation_length:]
-                    is_conversation,topic = await self.check_conversation(messages_in_conversation)
-                    if is_conversation == True:
-                        self.bot.debug_log(f'启动对话')
-                        self.new_topic(messages_in_conversation,topic)
-                        await self.ask_amiya_with_queue(messages_in_conversation)
+        last_talk = time.time()
+
+        while True:
+            await asyncio.sleep(5)
+
+            try:
+
+                should_talk = False
+                message_in_conversation = self.storage.message_after(last_talk)
+
+                # self.bot.debug_log(f'should_talk check {len(message_in_conversation)}')
+
+                # 下面列出了所有兔兔可能会回复的条件:
+
+                # 在有话题的情况下，命中reply_check，这个是用来控制对话中消息频率的
+                if self.storage.topic is not None:
                     
-                    middle_index = len(traceable_message_list) // 2
-                    self.traceable_timestamp = traceable_message_list[middle_index].timestamp
-                    self.bot.debug_log(f'话题存储折半')
-                        
-                if not self.topic_active and len(data.text_original) > 4:
-                    async def check_reply():
-                        timeout = float(self.get_handler_config('no_reply_timeout', 60))
-                        await asyncio.sleep(timeout)
-                        recent_messages_duration = [
-                            msg for msg in self.recent_messages
-                            if time.time() - msg.timestamp <= timeout
-                        ]
-                        
-                        if not recent_messages_duration and not self.topic_active:                        
-                            self.bot.debug_log(f'进行冷场判定 {message_context.text}')
-                            if random.random() < float(self.get_handler_config('reply_probability', 0.1)):
-                                self.bot.debug_log(f'冷场判定成功')
-                                # 3.1.0 版本起，冷场判断也要判断话题和对话长度
-                                messages_in_conversation = self.recent_messages[0-conversation_length:]
-                                if len(messages_in_conversation) >= conversation_length /2:
-                                    is_conversation,topic = await self.check_conversation(messages_in_conversation)
-                                    if is_conversation == True:
-                                        self.new_topic(messages_in_conversation,topic)
-                                        await self.ask_amiya_with_queue(messages_in_conversation)
-                        else:
-                            self.bot.debug_log(f'该条消息已被真人回复')
-
-                    asyncio.create_task(check_reply())
-        else:
-
-            if message_context.is_quote or force:
-                self.bot.debug_log(f'用户{data.nickname}:{data.user_id}加入话题')
-                self.topic_users.add(data.user_id)
-                self.interest = self.interest + 200
-            else:
-                if time.time() - self.last_reply_time > float(self.get_handler_config('topic_timeout', 30)):
-                    self.bot.debug_log(f'太久无人回复,超过topic_timeout')
-                    self.close_topic()
-
-            self.bot.debug_log(f'持续对话判断:{data.user_id} -> {self.topic_users} ')
-
-            if data.user_id in self.topic_users:
-                if await self.ask_amiya_with_queue([message_context]):
-                    self.topic_messages.append(message_context)
-
-        # # 清理过期的消息 但是至少保留一条 不进行清理了，因为现在最大就会取conversation_length_reverse_index长度了
-        # if len(traceable_message_list)> 1:
-        #     discard_time = self.get_formatted_config('old_message_discard_time')
-        #     self.recent_messages = [self.recent_messages[-1]] + [msg for msg in self.recent_messages[:-1]
-        #                                                          if time.time() - msg.timestamp <= float(discard_time)]
+                    if self.storage.topic != self.amiya_topic:
+                        self.interest = float(self.get_handler_config('interest_initial',1000.0))
+                        self.bot.debug_log(f'话题改变 {self.amiya_topic} -> {self.storage.topic} interest重置:{self.interest}')
+                        self.amiya_topic = self.storage.topic
         
-        self.last_reply_time = time.time()
+                    # f_str = [f"{context.nickname}: {context.text} ({context.timestamp})\n"  for context in self.storage.recent_messages[-5:]]
+                    # self.bot.debug_log(f'Last 5: {f_str}')
+
+                    # 最少要间隔十条消息，不可以连续说话
+                    if not any(msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID for msg in self.storage.recent_messages[-10:]):
+                        if next(self.reply_check):
+                            should_talk = True
+                        else:
+                            # 未命中加5，防止一堆人就这一个话题讨论一天，兔兔一直不插话
+                            self.interest = self.interest + 5
+                
+                # 最近的消息里有未处理的quote或者prefix
+                if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
+                    should_talk = True
+
+                if should_talk:
+                    last_talk = time.time()
+
+                    await self.ask_amiya(message_in_conversation)
+
+            except Exception as e:
+                # 如果重试次数用完仍然没有成功，返回错误信息
+                self.bot.debug_log(f'Unknown Error {e}')
+
 
     def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=1000,distinguish_doc:bool= False) -> Tuple[list, str, list]:
 
@@ -233,7 +160,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 else:
                     text_to_append = ""
             if len(result) + len(text_to_append) + 1 <= max_chars:
-                # 如果拼接后的长度还没有超过1000个字符，就继续拼接
+                # 如果拼接后的长度还没有超过max_chars个字符，就继续拼接
                 result = text_to_append + "\n" + result
                 if context.user_id != 0:
                     request_obj.append({"role": "user", "content": context.text})
@@ -256,59 +183,63 @@ class DeepCosplay(ChatGPTMessageHandler):
             max_chatgpt_chars = 8000
             distinguish_doc = True
 
-        _,result,memory_to_add = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)
+        _,result,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)
 
         command = self.load_template('amiya-template-v1.txt')
 
         command = command.replace("<<QUERY>>", result)
 
-        command = command.replace("<<Topic>>", self.topic)
+        command = command.replace("<<Topic>>", self.amiya_topic)
 
         max_prompt_chars = max_chatgpt_chars-len(command)
         self.bot.debug_log(f'加入最多{max_prompt_chars}字的memory')
 
-        # 字数
-        longest_context = max(context_list, key=lambda context: len(context.text))
+        # 字数 最长是用户发言的四倍，方差2倍，高斯分布控制
+        filtered_context_list = [context for context in context_list if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID]
+        longest_context = max(filtered_context_list, key=lambda context: len(context.text))
         max_word_length = len(longest_context.text)
-        word_limit = int(random.gauss(max_word_length, max_word_length/2))*2
+        word_limit = int(random.gauss(max_word_length*4, max_word_length*2))
         
         command = command.replace("<<WordCount>>", f'{word_limit}')
 
-        _,memory_str,_ = self.pick_prompt(self.amiya_memory,max_prompt_chars,distinguish_doc)
+        # 五分钟内的所有内容
+        memory_in_time = self.storage.message_after(time.time()- 5 * 60)
+        # 最近20条对话
+        memory_in_count = self.storage.recent_messages[-20:]
+
+        memory = list(set(memory_in_time).union(set(memory_in_count)))
+
+        _,memory_str,_ = self.pick_prompt(memory,max_prompt_chars,distinguish_doc)
 
         command = command.replace("<<MEMORY>>", memory_str)
 
         success , message_send, content_factor = await self.get_amiya_response(command, self.channel_id)
 
-        self.amiya_memory.extend(memory_to_add)
-        self.bot.debug_log(f'memory add:{self.amiya_memory}')
-
         interest_decrease = random.randint(50, 100)
 
-        time = None
-        for previou_msg in reversed(self.recent_messages):
+        time_factor = None
+        for previou_msg in reversed(self.storage.recent_messages):
             if previou_msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID:
-                time = previou_msg.timestamp
+                time_factor = previou_msg.timestamp
 
         for amiya_context in message_send:
-            interest_factor = calculate_timestamp_factor(time,amiya_context.timestamp)
+            interest_factor = calculate_timestamp_factor(time_factor,amiya_context.timestamp)
 
             self.interest = self.interest - interest_decrease * interest_factor * content_factor
             self.bot.debug_log(f'兴趣变化{self.interest} -= {interest_decrease} * {interest_factor} * {content_factor}')
 
             if self.interest <0 :
-                self.bot.debug_log(f'兴趣耗尽')
-                self.close_topic()
-                    
-            self.amiya_memory.append(amiya_context)
-            self.recent_messages.append(amiya_context)
+                self.bot.debug_log(f'兴趣耗尽')                 
             
+            self.storage.recent_messages.append(amiya_context)
+
         return True
 
-    async def get_amiya_response(self, command: str, channel_id: str) -> Tuple[bool, str]:
-        max_retries = int(self.get_handler_config('max_retries', 3))
+    async def get_amiya_response(self, command: str, channel_id: str) -> Tuple[bool, List[ChatGPTMessageContext],float]:
 
-        if max_retries < 1:
+        if self.bot.get_config("model",self.channel_id) == "gpt-4":
+            max_retries = 1
+        else:
             max_retries = 3
         
         retry_count = 0 
@@ -348,8 +279,8 @@ class DeepCosplay(ChatGPTMessageHandler):
                         if words_response is None:
                             continue
 
-                        corelation_on_topic = json_obj.get('CorelationOnTopic', 0.8)
-                        corelation_on_conversation = json_obj.get('CorelationOnConversation', 0.8)
+                        corelation_on_topic = json_obj.get('corelation_on_topic', 0.8)
+                        corelation_on_conversation = json_obj.get('corelation_on_conversation', 0.8)
 
                         max_factor = 5
                         min_factor = 1
@@ -395,76 +326,12 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return True, message_send,interest_factor
 
-
-    async def ask_amiya_with_queue(self,  message_context_list: List[ChatGPTMessageContext], force=False):
-
-        self._queued_messages.extend(message_context_list)
-
-        if not self._ask_amiya_in_progress:
-            self._ask_amiya_in_progress = True
-
-            try:
-
-                while self._queued_messages:
-                    messages_to_process = self._queued_messages.copy()
-                    self._queued_messages.clear()
-
-                    if not force:
-                        probability = self.get_reply_probability()
-                            
-                        if  not probability:
-                            self.bot.debug_log(f'ask_amiya_with_queue丢弃{len(messages_to_process)}条消息，因为太近了')
-                            self.interest = self.interest + 50 * (1- probability)
-                            return False
-                        
-                    self.bot.debug_log(f'ask_amiya_with_queue准备对{len(messages_to_process)}条消息进行处理')
-                    await self.ask_amiya(messages_to_process)
-
-            finally:
-                self._ask_amiya_in_progress = False
-        else:
-            self.bot.debug_log(f'ask_amiya_with_queue 正忙，消息已被延后处理')
-
-        return True
-
-    # 可以判断一个str的列表是否属于同一个话题
-    async def check_conversation(self, context_list: List[ChatGPTMessageContext]):
-
-        if self.topic is not None and self.topic != "":
-            # 已经创建topic时,不需要再检查
-            self.bot.debug_log(f'重复检查Conversation，不需要，直接返回topic:{self.topic}')
-            return True,self.topic
-
-        _, request_text,_ = self.pick_prompt(context_list,1000,True)
-
-        command = self.load_template('conversation-probablity-template-v1.txt')
-
-        command = command.replace('<<CONVERSATION>>',request_text)
-
-        # 因为3.5 API 在这个场景下表现也很好，因此这里就不浪费钱调用4的API了
-        success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], self.channel_id,"gpt-3.5-turbo")
-        
-        # self.bot.debug_log(f"检查对话是否为同一话题:\n{command}\n----------\n{response}")
-
-        json_objects = extract_json(response)
-
-        if not json_objects:
-            return False,""
-
-        # Assuming you want to check if 'conversation' is True in any of the JSON objects
-        for json_obj in json_objects:
-            if json_obj.get('conversation', False) == True:
-                return True,json_obj.get('topic', "")
-
-        return False,""
-
-
     # 发送消息到指定频道
     async def send_message(self, message: str):
         if message is None:
             return
 
-        debug_info =  f'{{Topic:"{self.topic}",Interest:{self.interest}}}'
+        debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest}}}'
 
         self.bot.debug_log(f'show_log_in_chat:{self.get_handler_config("show_log_in_chat")}')
 

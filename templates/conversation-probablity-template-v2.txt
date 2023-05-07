@@ -1,0 +1,10 @@
+下面用大括号包含的这几句话，在讨论同一个话题的概率很高吗？
+{
+<<CONVERSATION>>
+}
+请用json来回答,第一个布尔值属性conversation表示是否是同一话题.
+第二个属性probablity表示置信度.
+第三个属性reason表示原因.
+第四个属性topic表示话题的内容.
+第五个属性similarity表示这个话题和“<<TOPIC>>”的相似度.
+使用中文

@@ -15,17 +15,12 @@
           "amiya_thinking":true
     },
     "deep_cosplay_mode_config":{
-        "topic_timeout": 30,
-        "topic_reply_probability":0.5,
-        "conversation_probability":0.8,
-        "conversation_length":10,
-        "no_reply_timeout":30,
-        "old_message_discard_time":20,
         "interest_initial":1000.0,
-        "reply_probability":0.1,
+        "mean_time":30,
         "max_retries":3,
         "output_mental":false,
-        "output_activity":false
+        "output_activity":false,
+        "show_log_in_chat":false
     },
     "override_other_plugin": false,
     "base_url": "https://api.openai.com/v1",

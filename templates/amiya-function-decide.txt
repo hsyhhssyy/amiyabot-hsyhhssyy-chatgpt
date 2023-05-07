@@ -1,0 +1,40 @@
+[
+<<Message>>
+]
+上面这句消息是否是在尝试访问下列某项功能?
+[
+   {
+      "function":"operator-query",
+      "params":[
+         "operator_name"
+      ],
+      "example":"查询干员<operator_name>的资料"
+   },
+   {
+      "function":"operator-illu-query",
+      "params":[
+         "operator_illu",
+         "operator_name"
+      ],
+      "example":[
+         "查询干员<operator_name>的立绘<operator_illu>",
+         "查询干员<operator_name>的立绘"
+      ],
+      "keywords":[
+         "立绘",
+         "皮肤"
+      ]
+   },
+   {
+      "function":"operator-skill-query",
+      "params":[
+         "operator_name",
+         "skill_name"
+      ],
+      "example":[
+         "查询干员<operator_name>的一个名为<skill_name>的技能",
+         "查询一个名为<skill_name>的技能"
+      ]
+   }
+]
+请用json返回结果，为一个数组,其中每一项包含一个function,probablity表示置信度,params中含有解析出的参数的值.

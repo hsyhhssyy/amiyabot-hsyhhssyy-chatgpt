@@ -44,30 +44,15 @@
       "type": "object",
       "title":"角色扮演",
       "properties": {
-        "topic_timeout": {
-          "title":"回归静默时间（秒）",
-          "description":"当没人和兔兔说话时，要多久兔兔才会回到空闲状态。",
+        "mean_time": {
+          "title":"平均发言时间",
+          "description":"在兔兔积极讨论时，平均多长时间发言一次。",
           "type": "integer"
         },
         "interest_initial": {
           "title":"初始兴趣",
           "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔让他不要一直接茬。",
           "type": "number"
-        },
-        "no_reply_timeout": {
-          "title":"暖场计时器（秒）",
-          "description":"当群内有多长时间没人说话时，兔兔会概率接一句话。",
-          "type": "integer"
-        },
-        "reply_probability": {
-          "title":"暖场几率",
-          "description":"兔兔触发暖场的几率，范围0.0到1.0",
-          "type": "number"
-        },
-        "max_retries": {
-          "title":"重试次数",
-          "description":"ChatGPT返回的格式不符合要求时的最大尝试次数，到达次数还不行则会返回“抱歉博士，阿米娅有点不明白。”",
-          "type": "integer"
         },
         "output_mental": {
           "title":"输出情绪",
