@@ -69,7 +69,7 @@ def format_request(text):
 async def check_talk(data: Message):
         
     enabled = bot.get_config('enable_in_this_channel',data.channel_id)
-    bot.debug_log(f'enable_in_this_channel: {data.channel_id} {enabled}')
+    bot.debug_log(f'[{data.channel_id:<10}]enable_in_this_channel: {enabled}')
     if enabled != True:
         return False, 0
 
@@ -99,7 +99,7 @@ async def _(data: Message):
     if not data.text:
         return
 
-    bot.debug_log(f'[ChatGPT]on_message{data.text_original}')
+    bot.debug_log(f'[{data.channel_id:<10}]on_message{data.text_original}')
     
     mode = bot.get_config('mode',data.channel_id)
 

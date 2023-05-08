@@ -68,7 +68,7 @@ class ChatGPTMessageHandler():
     def debug_log(self, message):
         show_log = self.bot.get_config("show_log")
         if show_log == True:
-            logger.info(f'[{self.channel_id}]{message}')
+            logger.info(f'[{self.channel_id:<10}]{message}')
 
 
     def get_handler_config(self, configName, default = None):
@@ -76,17 +76,17 @@ class ChatGPTMessageHandler():
 
         if configName in handler_conf.keys():
             if handler_conf[configName] != "" and handler_conf[configName] != []:
-                self.bot.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
+                self.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
                 return handler_conf[configName]
         
         handler_conf = self.bot.get_config(self.handler_conf_key)
 
         if configName in handler_conf.keys():
             if handler_conf[configName] != "" and handler_conf[configName] != []:
-                self.bot.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
+                self.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
                 return handler_conf[configName]
             else:
                 return default
         
-        self.bot.debug_log(f'[GetConfig]{configName} : None')
+        self.debug_log(f'[GetConfig]{configName} : None')
         return default

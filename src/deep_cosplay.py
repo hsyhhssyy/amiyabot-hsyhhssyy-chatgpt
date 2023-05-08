@@ -63,7 +63,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
                 rand_value = random.random()
 
-                self.bot.debug_log(f'{time_elapsed}/{mean_time} 秒间隔后的说话概率 : {rand_value} < {probability} ?')
+                self.debug_log(f'{time_elapsed:.2f}/{mean_time:.2f} 秒间隔后的说话概率 : {rand_value} < {probability} ?')
                     
                 if rand_value < probability:
                     last_true_time = current_time
@@ -75,7 +75,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             
             except Exception as e:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                self.bot.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e}')
 
     def load_template(self,template_name:str):
 
@@ -83,7 +83,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         if template_name.startswith("amiya-template"):
             model = self.bot.get_config('model', self.channel_id)
-            self.bot.debug_log(f'template select: {model} {template_filename}')
+            self.debug_log(f'template select: {model} {template_filename}')
             if(model == "gpt-4"):
                 template_filename = "amiya-template-v2.txt"
 
@@ -133,7 +133,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 no_word_limit = False
                 message_in_conversation = self.storage.message_after(last_talk)
 
-                # self.bot.debug_log(f'should_talk check {len(message_in_conversation)}')
+                # self.debug_log(f'should_talk check {len(message_in_conversation)}')
 
                 # 下面列出了所有兔兔可能会回复的条件:
 
@@ -142,11 +142,11 @@ class DeepCosplay(ChatGPTMessageHandler):
                     
                     if self.storage.topic != self.amiya_topic:
                         self.interest = float(self.get_handler_config('interest_initial',1000.0))
-                        self.bot.debug_log(f'话题改变 {self.amiya_topic} -> {self.storage.topic} interest重置:{self.interest}')
+                        self.debug_log(f'话题改变 {self.amiya_topic} -> {self.storage.topic} interest重置:{self.interest}')
                         self.amiya_topic = self.storage.topic
         
                     # f_str = [f"{context.nickname}: {context.text} ({context.timestamp})\n"  for context in self.storage.recent_messages[-5:]]
-                    # self.bot.debug_log(f'Last 5: {f_str}')
+                    # self.debug_log(f'Last 5: {f_str}')
 
                     if next(self.reply_check):                        
                         # 最少要间隔 inerval_factor 条消息，不可以连续说话
@@ -154,13 +154,13 @@ class DeepCosplay(ChatGPTMessageHandler):
                         if not any(msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID for msg in self.storage.recent_messages[-inerval_factor:]):
                             should_talk = True
                         else:
-                            self.bot.debug_log(f'未够 {inerval_factor} 条消息，阻止发话，interest + 5')
+                            self.debug_log(f'未够 {inerval_factor} 条消息，阻止发话，interest + 5')
                             # 未命中加5，防止一堆人就这一个话题讨论一天，兔兔一直不插话
                             self.interest = self.interest + 5
                 
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
-                    self.bot.debug_log(f'有Quote/Prefix，强制发话')
+                    self.debug_log(f'有Quote/Prefix，强制发话')
                     should_talk = True
                     no_word_limit = True
 
@@ -170,7 +170,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                     await self.ask_amiya(message_in_conversation,no_word_limit)
 
             except Exception as e:
-                self.bot.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e}')
 
 
     def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=1000,distinguish_doc:bool= False) -> Tuple[list, str, list]:
@@ -237,7 +237,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         
         command = command.replace("<<WordCount>>", f'{word_limit_count}')
 
-        self.bot.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
+        self.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
 
         # 五分钟内的所有内容
         memory_in_time = self.storage.message_after(time.time()- 5 * 60)
@@ -263,10 +263,10 @@ class DeepCosplay(ChatGPTMessageHandler):
             interest_factor = calculate_timestamp_factor(time_factor,amiya_context.timestamp)
 
             self.interest = self.interest - interest_decrease * interest_factor * content_factor
-            self.bot.debug_log(f'当前兴趣: {self.interest} 增减值: - {interest_decrease} * {interest_factor} * {content_factor}')
+            self.debug_log(f'当前兴趣: {self.interest} 增减值: - {interest_decrease} * {interest_factor} * {content_factor}')
 
             if self.interest <0 :
-                self.bot.debug_log(f'兴趣耗尽')                 
+                self.debug_log(f'兴趣耗尽')                 
             
             self.storage.recent_messages.append(amiya_context)
 
@@ -281,7 +281,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         
         retry_count = 0 
 
-        self.bot.debug_log(f'ChatGPT Max Retry: {max_retries}')
+        self.debug_log(f'ChatGPT Max Retry: {max_retries}')
 
         message_send = []
 
@@ -297,7 +297,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             while retry_count < max_retries:
                 success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
 
-                # self.bot.debug_log(f'ChatGPT原始回复:{response}')
+                # self.debug_log(f'ChatGPT原始回复:{response}')
 
                 json_objects = extract_json(response)
 
@@ -338,7 +338,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 if successful_sent:
                     break
                 else:
-                    self.bot.debug_log(f'未读到Json，重试第{retry_count+1}次')
+                    self.debug_log(f'未读到Json，重试第{retry_count+1}次')
                     retry_count += 1
 
             if not successful_sent:
@@ -350,7 +350,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         except Exception as e:
             # 如果重试次数用完仍然没有成功，返回错误信息
-                self.bot.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e}')
                 amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
                 await self.send_message('抱歉博士，阿米娅有点不明白。')
                 message_send.append(amiya_context)
@@ -365,7 +365,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest}}}'
 
-        self.bot.debug_log(f'show_log_in_chat:{self.get_handler_config("show_log_in_chat")}')
+        self.debug_log(f'show_log_in_chat:{self.get_handler_config("show_log_in_chat")}')
 
         if self.get_handler_config("show_log_in_chat"):
             message = f"{debug_info}\n{message}"

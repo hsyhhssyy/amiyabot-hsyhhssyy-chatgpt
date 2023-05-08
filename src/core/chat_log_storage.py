@@ -12,6 +12,8 @@ from statistics import median
 
 from amiyabot import Message, Chain
 
+from amiyabot.log import LoggerManager
+
 from ..core.message_context import ChatGPTMessageContext
 from ..core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from ..core.ask_chat_gpt import ChatGPTDelegate
@@ -20,6 +22,8 @@ from ..util.string_operation import extract_json
 from ..util.complex_math import find_most_recent_cluster,dbscan
 
 curr_dir = os.path.dirname(__file__)
+
+logger = LoggerManager('ChatGPT')
 
 class ChatLogStorage():
     def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id):
@@ -36,6 +40,11 @@ class ChatLogStorage():
         self.__collect_data()
 
     NoTopic = 'NOTOPIC'
+
+    def debug_log(self, message):
+        show_log = self.bot.get_config("show_log")
+        if show_log == True:
+            logger.info(f'[{self.channel_id:<10}]{message}')
 
     def __collect_data(self):
         asyncio.create_task(self.__collect_average_message_in_60_sec())
@@ -83,7 +92,7 @@ class ChatLogStorage():
             if min_samples > 20:
                 min_samples = 20
                 
-            self.bot.debug_log(f'[{self.channel_id}]average_message_in_60_sec:{self.average_message_in_60_sec} min_samples:{min_samples}')
+            self.debug_log(f'60秒内平均聊天:{self.average_message_in_60_sec}->最小取样:{min_samples}')
 
             clusters = dbscan(self.recent_messages, eps, min_samples)
 
@@ -92,8 +101,8 @@ class ChatLogStorage():
 
             recent_cluster = find_most_recent_cluster(clusters)
             
-            # self.bot.debug_log(f'clusters:\n{self.messages_to_string(clusters)}')
-            self.bot.debug_log(f'recent cluster length:{len(recent_cluster)}')
+            # self.debug_log(f'clusters:\n{self.messages_to_string(clusters)}')
+            self.debug_log(f'最近聊天聚类长度:{len(recent_cluster)}')
 
             if recent_cluster and len(recent_cluster)>=self.average_message_in_60_sec:
                 # 计算列表长度的一半
@@ -109,7 +118,7 @@ class ChatLogStorage():
 
                 non_empty_topic_count = len(recent_cluster) - non_empty_topic_count
 
-                self.bot.debug_log(f'尝试判断Topic: {half_length} {non_empty_topic_count} {topic_content}')
+                self.debug_log(f'尝试判断Topic是否出现/继续存在: if {non_empty_topic_count}(当前新增聊天) >= {half_length}(最近聊天聚类)  当前话题:{topic_content}')
 
                 if non_empty_topic_count >= half_length:
                     # 有一半以上元素没有被判断topic
@@ -117,7 +126,7 @@ class ChatLogStorage():
                     
                     if success and topic is not None and topic != ChatLogStorage.NoTopic:
                         if self.topic != topic:                        
-                            self.bot.debug_log(f'新话题诞生:{topic}')
+                            self.debug_log(f'新话题诞生:{topic}')
                         self.topic = topic
                     else:
                         self.topic = None
@@ -131,7 +140,7 @@ class ChatLogStorage():
                 recent_recent_message = self.recent_messages[-self.average_message_in_60_sec:]
                 if all(((not hasattr(msg, 'topic')) or (msg.topic ==  ChatLogStorage.NoTopic) ) for msg in recent_recent_message):
                     if self.topic is not None:                        
-                        self.bot.debug_log(f'长时间跑题，回归静默')
+                        self.debug_log(f'长时间跑题，回归静默')
                     self.topic = None
 
     async def __collect_average_message_freq_in_1_day(self):
@@ -142,7 +151,7 @@ class ChatLogStorage():
             try:
                 avg_frequencies = self.average_freq_per_user()
                 if avg_frequencies:
-                    self.bot.debug_log(f'avg_frequencies:{avg_frequencies}')
+                    self.debug_log(f'avg_frequencies:{avg_frequencies}')
                     
                     mediua_freq = median(avg_frequencies)
                     self.mediua_freq = mediua_freq
@@ -151,7 +160,7 @@ class ChatLogStorage():
 
             except Exception as e:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                self.bot.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e}')
             
 
     def average_freq_per_user(self):
@@ -183,7 +192,7 @@ class ChatLogStorage():
 
         for message in context_list:
             if hasattr(message, 'topic') and message.topic is not None:
-                topic_counter[message.topic] += 1
+                topic_counter[f'{message.topic}'] += 1
 
         most_common_topic = topic_counter.most_common(1)
 
@@ -209,7 +218,7 @@ class ChatLogStorage():
         # 因为3.5 API 在这个场景下表现也很好，因此这里就不浪费钱调用4的API了
         success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], self.channel_id,"gpt-3.5-turbo")
         
-        # self.bot.debug_log(f"检查对话是否为同一话题:\n{command}\n----------\n{response}")
+        # self.debug_log(f"检查对话是否为同一话题:\n{command}\n----------\n{response}")
 
         json_objects = extract_json(response)
 
@@ -220,17 +229,22 @@ class ChatLogStorage():
         for json_obj in json_objects:
             if json_obj.get('conversation', False) == True:
 
-                probability = json_obj.get('probability', 0)
+                probability = float(json_obj.get('probability', 0))
 
                 if probability < 0.8:
                     return False,""
 
-                similarity = json_obj.get('similarity', 0)
+                similarity = float(json_obj.get('similarity', 0))
                 
-                if topic_content is not None and similarity > 0.85:
+                if topic_content is not None and similarity >= 0.8:
                     return True,topic_content
                 
-                return True,json_obj.get('topic', "")
+                new_topic = json_obj.get('topic', "")
+
+                if isinstance(new_topic, list):
+                    new_topic = ','.join(new_topic)
+
+                return True,new_topic
 
         return False,""
 
