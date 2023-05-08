@@ -6,6 +6,7 @@ import re
 import math
 import time
 
+from collections import Counter,deque
 from typing import List, Tuple
 from statistics import median
 
@@ -34,6 +35,7 @@ class ChatLogStorage():
 
         self.__collect_data()
 
+    NoTopic = 'NOTOPIC'
 
     def __collect_data(self):
         asyncio.create_task(self.__collect_average_message_in_60_sec())
@@ -41,17 +43,19 @@ class ChatLogStorage():
         asyncio.create_task(self.__collect_average_message_freq_in_1_day())
 
     async def __collect_average_message_in_60_sec(self):
-        while True:
-            start_time = time.time()
-            end_time = start_time + 60
-            total_items = 0
-            while time.time() < end_time:
-                total_items += len(self.recent_messages)
-                await asyncio.sleep(0.1)
-            average = total_items / 60
+        """每隔5秒统计过去60秒内的消息数量，然后将计算得到的平均值存储到self.average_message_in_60_sec中"""
+        window_size = 5
+        message_count_window = deque(maxlen=window_size)
 
-            self.average_message_in_60_sec = average
+        while True:
+            now = time.time()
+            one_minute_ago = now - 60
+            message_count = sum(1 for msg in self.recent_messages if msg.timestamp > one_minute_ago)
+            message_count_window.append(message_count)
             
+            if len(message_count_window) == window_size:
+                self.average_message_in_60_sec = int (sum(message_count_window) / window_size)
+
             await asyncio.sleep(5)
 
     def messages_to_string(self,messages:List[List[ChatGPTMessageContext]]):
@@ -66,10 +70,20 @@ class ChatLogStorage():
     async def __collect_topic(self):
 
         eps = 120 # 单位是 秒
-        min_samples = 5 # 最少聚类
 
         while True:
             await asyncio.sleep(2)
+
+            min_samples = self.average_message_in_60_sec # 最少聚类
+
+            if min_samples < 5:
+                min_samples = 5
+            
+            
+            if min_samples > 20:
+                min_samples = 20
+                
+            self.bot.debug_log(f'[{self.channel_id}]average_message_in_60_sec:{self.average_message_in_60_sec} min_samples:{min_samples}')
 
             clusters = dbscan(self.recent_messages, eps, min_samples)
 
@@ -79,9 +93,9 @@ class ChatLogStorage():
             recent_cluster = find_most_recent_cluster(clusters)
             
             # self.bot.debug_log(f'clusters:\n{self.messages_to_string(clusters)}')
-            # self.bot.debug_log(f'recent cluster:\n{len(recent_cluster)}')
+            self.bot.debug_log(f'recent cluster length:{len(recent_cluster)}')
 
-            if recent_cluster and len(recent_cluster)>0:
+            if recent_cluster and len(recent_cluster)>=self.average_message_in_60_sec:
                 # 计算列表长度的一半
                 half_length = len(recent_cluster) // 2
                 # 统计具有非空topic属性的元素数量                
@@ -95,13 +109,15 @@ class ChatLogStorage():
 
                 non_empty_topic_count = len(recent_cluster) - non_empty_topic_count
 
-                # self.bot.debug_log(f'N: {half_length} {non_empty_topic_count} {topic_content}')
+                self.bot.debug_log(f'尝试判断Topic: {half_length} {non_empty_topic_count} {topic_content}')
 
                 if non_empty_topic_count >= half_length:
                     # 有一半以上元素没有被判断topic
                     success ,topic = await self.check_conversation(recent_cluster)
                     
-                    if success:
+                    if success and topic is not None and topic != ChatLogStorage.NoTopic:
+                        if self.topic != topic:                        
+                            self.bot.debug_log(f'新话题诞生:{topic}')
                         self.topic = topic
                     else:
                         self.topic = None
@@ -110,19 +126,33 @@ class ChatLogStorage():
                         if success:
                             msg.topic = topic
                         else:
-                            msg.topic = "None"
+                            msg.topic = ChatLogStorage.NoTopic
+            else:
+                recent_recent_message = self.recent_messages[-self.average_message_in_60_sec:]
+                if all(((not hasattr(msg, 'topic')) or (msg.topic ==  ChatLogStorage.NoTopic) ) for msg in recent_recent_message):
+                    if self.topic is not None:                        
+                        self.bot.debug_log(f'长时间跑题，回归静默')
+                    self.topic = None
 
     async def __collect_average_message_freq_in_1_day(self):
 
         while True:
-            await asyncio.sleep(60*60)
+            await asyncio.sleep(60)
 
-            avg_frequencies = self.average_freq_per_user(recent_messages)
-            if avg_frequencies:
-                mediua_freq = median(avg_frequencies)
-                self.mediua_freq = mediua_freq
-            else:
-                self.mediua_freq = 60
+            try:
+                avg_frequencies = self.average_freq_per_user()
+                if avg_frequencies:
+                    self.bot.debug_log(f'avg_frequencies:{avg_frequencies}')
+                    
+                    mediua_freq = median(avg_frequencies)
+                    self.mediua_freq = mediua_freq
+                else:
+                    self.mediua_freq = 60
+
+            except Exception as e:
+                # 如果重试次数用完仍然没有成功，返回错误信息
+                self.bot.debug_log(f'Unknown Error {e}')
+            
 
     def average_freq_per_user(self):
         current_time = time.time()
@@ -143,18 +173,26 @@ class ChatLogStorage():
             time_diffs = [sorted_timestamps[i+1] - sorted_timestamps[i] for i in range(len(sorted_timestamps) - 1)]
             if time_diffs:
                 avg_frequencies.append(sum(time_diffs) / len(time_diffs))
+
         return avg_frequencies
         
-
     # 可以判断一个str的列表是否属于同一个话题
     async def check_conversation(self, context_list: List[ChatGPTMessageContext]):
 
-        topic_content = None
+        topic_counter = Counter()
+
         for message in context_list:
             if hasattr(message, 'topic') and message.topic is not None:
-                topic_content = message.topic
+                topic_counter[message.topic] += 1
+
+        most_common_topic = topic_counter.most_common(1)
+
+        topic_content = most_common_topic[0][0] if most_common_topic else None
 
         _, request_text,_ = ChatGPTMessageContext.pick_prompt(context_list,1000,True)
+
+        if topic_content == ChatLogStorage.NoTopic:
+            topic_content = None
 
         if topic_content is not None:
             with open(f'{curr_dir}/../../templates/conversation-probablity-template-v2.txt', 'r', encoding='utf-8') as file:
@@ -182,7 +220,7 @@ class ChatLogStorage():
         for json_obj in json_objects:
             if json_obj.get('conversation', False) == True:
 
-                probability = json_obj.get('similarity', 0)
+                probability = json_obj.get('probability', 0)
 
                 if probability < 0.8:
                     return False,""

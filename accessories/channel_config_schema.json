@@ -2,7 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    
+    "enable_in_this_channel": {
+      "title":"在本频道开启",
+      "description":"加入一个功能的总开关，并且默认是关闭的。这样同时参与多个群的兔兔也不会疯狂消费ChatGPT了",
+      "type": "boolean"
+    },    
     "mode": {
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
@@ -40,14 +44,9 @@
       "type": "object",
       "title":"角色扮演",
       "properties": {
-        "mean_time": {
-          "title":"平均发言时间",
-          "description":"在兔兔积极讨论时，平均多长时间发言一次。",
-          "type": "integer"
-        },
         "interest_initial": {
           "title":"初始兴趣",
-          "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔让他不要一直接茬。",
+          "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔活跃的时长。",
           "type": "number"
         },
         "output_mental": {
@@ -63,6 +62,11 @@
         "show_log_in_chat": {
           "title":"在对话中调试",
           "description":"开启后将会在兔兔的输出中直接出现调试信息。",
+          "type": "boolean"
+        },
+        "silent_mode": {
+          "title":"静默测试",
+          "description":"开启以后，插件会正常执行所有功能，但是在发送消息那一步什么都不发送，可以用来提前测试兔兔AI在群内的可能效果",
           "type": "boolean"
         }
       }

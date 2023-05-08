@@ -6,7 +6,12 @@
       "title":"API Key",
       "description":"由OpenAI提供给您的ApiKey，没有的话请到https://platform.openai.com/account/api-keys申请。",
       "type": "string"
-    }, 
+    },
+    "enable_in_this_channel": {
+      "title":"默认开启",
+      "description":"关闭此开关时，未提供频道级配置的频道默认不开启本功能，反之则开启",
+      "type": "boolean"
+    },   
     "mode": {
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
@@ -44,11 +49,6 @@
       "type": "object",
       "title":"角色扮演",
       "properties": {
-        "mean_time": {
-          "title":"平均发言时间",
-          "description":"在兔兔积极讨论时，平均多长时间发言一次。",
-          "type": "integer"
-        },
         "interest_initial": {
           "title":"初始兴趣",
           "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔让他不要一直接茬。",
@@ -67,6 +67,11 @@
         "show_log_in_chat": {
           "title":"在对话中调试",
           "description":"开启后将会在兔兔的输出中直接出现调试信息。",
+          "type": "boolean"
+        },
+        "silent_mode": {
+          "title":"静默测试",
+          "description":"开启以后，插件会正常执行所有功能，但是在发送消息那一步什么都不发送，可以用来提前测试兔兔AI在群内的可能效果",
           "type": "boolean"
         }
       }
@@ -88,7 +93,7 @@
     },
     "model": {
       "title":"GPT模型",
-      "description":"选择要使用的gpt模型",
+      "description":"选择要使用的gpt模型(注意钱包)",
       "type": "string",
       "enum": ["gpt-3.5-turbo", "gpt-4"]
     },

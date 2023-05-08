@@ -65,6 +65,12 @@ class ChatGPTMessageHandler():
         self.handler_conf_key = handler_conf_key
         self.instance = instance
     
+    def debug_log(self, message):
+        show_log = self.bot.get_config("show_log")
+        if show_log == True:
+            logger.info(f'[{self.channel_id}]{message}')
+
+
     def get_handler_config(self, configName, default = None):
         handler_conf = self.bot.get_config(self.handler_conf_key,self.channel_id)
 

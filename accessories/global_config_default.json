@@ -1,5 +1,6 @@
 {
     "api_key": "12345",
+    "enable_in_this_channel":false,
     "mode": "经典模式",
     "normal_mode_config":{
         "predef_context": [
@@ -27,7 +28,8 @@
     "proxy": "",
     "model": "gpt-3.5-turbo",
     "show_log": false,
-    "show_log_in_chat": false
+    "show_log_in_chat": false,
+    "silent_mode": false
     
   }
   

@@ -1,4 +1,5 @@
 {
+    "enable_in_this_channel":false,
     "mode": "经典模式",
     "normal_mode_config":{
         "predef_context": [

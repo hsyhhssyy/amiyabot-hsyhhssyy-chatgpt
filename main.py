@@ -17,7 +17,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.2.1',
+    version='3.2.2',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -67,8 +67,14 @@ def format_request(text):
     return text
 
 async def check_talk(data: Message):
-    
+        
+    enabled = bot.get_config('enable_in_this_channel',data.channel_id)
+    bot.debug_log(f'enable_in_this_channel: {data.channel_id} {enabled}')
+    if enabled != True:
+        return False, 0
+
     # 临时排除纯阿拉伯数字的消息，等待兔妈修复
+    # 已修复，但是就先不移除了，以防万一
     if data.text.isdigit():
         return False,0
 

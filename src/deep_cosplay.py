@@ -16,6 +16,7 @@ from .core.chat_log_storage import ChatLogStorage
 
 from .util.string_operation import extract_json
 from .util.datetime_operation import calculate_timestamp_factor
+from .util.complex_math import scale_to_reverse_exponential
 
 curr_dir = os.path.dirname(__file__)
 
@@ -44,6 +45,9 @@ class DeepCosplay(ChatGPTMessageHandler):
                 mean_time = self.storage.mediua_freq         
                 if mean_time < 30:
                     mean_time = 30
+                
+                if mean_time > 3600:
+                    mean_time = 3600
 
                 current_time = time.time()
                 time_elapsed = current_time - last_true_time
@@ -91,6 +95,31 @@ class DeepCosplay(ChatGPTMessageHandler):
     async def on_message(self, data: Message, force: bool = False):
         self.storage.enqueue(data)
 
+    def generate_minimum_message_interval(self, factor:int):
+        if factor < 20:
+            raise ValueError("factor 不能小于20.")
+
+        # 定义一个包含所有可能输出值的列表
+        numbers = list(range(0, factor + 1))
+
+        # 为每个数字定义权重，以满足题目中的概率要求
+        weights = []
+
+        for num in numbers:
+            if num < 5:
+                weights.append(0.5)  # 非常低的概率
+            elif num < 10:
+                weights.append(1)    # 较低的概率
+            elif num <= 20:
+                weights.append(10)   # 大部分情况
+            else:
+                weights.append(0.5)  # 小概率高于20
+
+        # 使用random.choices()函数根据权重随机选择一个数字
+        interval = random.choices(numbers, weights=weights, k=1)[0]
+
+        return interval
+
     async def __amiya_loop(self):
 
         last_talk = time.time()
@@ -101,6 +130,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             try:
 
                 should_talk = False
+                no_word_limit = False
                 message_in_conversation = self.storage.message_after(last_talk)
 
                 # self.bot.debug_log(f'should_talk check {len(message_in_conversation)}')
@@ -118,25 +148,28 @@ class DeepCosplay(ChatGPTMessageHandler):
                     # f_str = [f"{context.nickname}: {context.text} ({context.timestamp})\n"  for context in self.storage.recent_messages[-5:]]
                     # self.bot.debug_log(f'Last 5: {f_str}')
 
-                    # 最少要间隔十条消息，不可以连续说话
-                    if not any(msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID for msg in self.storage.recent_messages[-10:]):
-                        if next(self.reply_check):
+                    if next(self.reply_check):                        
+                        # 最少要间隔 inerval_factor 条消息，不可以连续说话
+                        inerval_factor = self.generate_minimum_message_interval(20)
+                        if not any(msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID for msg in self.storage.recent_messages[-inerval_factor:]):
                             should_talk = True
                         else:
+                            self.bot.debug_log(f'未够 {inerval_factor} 条消息，阻止发话，interest + 5')
                             # 未命中加5，防止一堆人就这一个话题讨论一天，兔兔一直不插话
                             self.interest = self.interest + 5
                 
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
+                    self.bot.debug_log(f'有Quote/Prefix，强制发话')
                     should_talk = True
+                    no_word_limit = True
 
                 if should_talk:
                     last_talk = time.time()
 
-                    await self.ask_amiya(message_in_conversation)
+                    await self.ask_amiya(message_in_conversation,no_word_limit)
 
             except Exception as e:
-                # 如果重试次数用完仍然没有成功，返回错误信息
                 self.bot.debug_log(f'Unknown Error {e}')
 
 
@@ -174,7 +207,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         return request_obj, result, picked_context
 
     # 根据一大堆话生成一个回复
-    async def ask_amiya(self, context_list: List[ChatGPTMessageContext]) -> str:
+    async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool=False) -> str:
         max_prompt_chars = 1000
         max_chatgpt_chars = 4000
         distinguish_doc = False
@@ -192,21 +225,25 @@ class DeepCosplay(ChatGPTMessageHandler):
         command = command.replace("<<Topic>>", self.amiya_topic)
 
         max_prompt_chars = max_chatgpt_chars-len(command)
-        self.bot.debug_log(f'加入最多{max_prompt_chars}字的memory')
 
-        # 字数 最长是用户发言的四倍，方差2倍，高斯分布控制
-        filtered_context_list = [context for context in context_list if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID]
-        longest_context = max(filtered_context_list, key=lambda context: len(context.text))
-        max_word_length = len(longest_context.text)
-        word_limit = int(random.gauss(max_word_length*4, max_word_length*2))
+        if no_word_limit:
+            word_limit_count = 1000
+        else:
+            # 字数 最长是用户平均发言的2倍，方差1倍，高斯分布控制
+            filtered_context_list = [context for context in context_list if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID]
+            total_length = sum(len(context.text) for context in filtered_context_list)
+            average_length = total_length / len(filtered_context_list)
+            word_limit_count = int(random.gauss(average_length * 2, average_length))
         
-        command = command.replace("<<WordCount>>", f'{word_limit}')
+        command = command.replace("<<WordCount>>", f'{word_limit_count}')
+
+        self.bot.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
 
         # 五分钟内的所有内容
         memory_in_time = self.storage.message_after(time.time()- 5 * 60)
         # 最近20条对话
         memory_in_count = self.storage.recent_messages[-20:]
-
+        # 二者拼一起作为Memory
         memory = list(set(memory_in_time).union(set(memory_in_count)))
 
         _,memory_str,_ = self.pick_prompt(memory,max_prompt_chars,distinguish_doc)
@@ -226,7 +263,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             interest_factor = calculate_timestamp_factor(time_factor,amiya_context.timestamp)
 
             self.interest = self.interest - interest_decrease * interest_factor * content_factor
-            self.bot.debug_log(f'兴趣变化{self.interest} -= {interest_decrease} * {interest_factor} * {content_factor}')
+            self.bot.debug_log(f'当前兴趣: {self.interest} 增减值: - {interest_decrease} * {interest_factor} * {content_factor}')
 
             if self.interest <0 :
                 self.bot.debug_log(f'兴趣耗尽')                 
@@ -279,19 +316,14 @@ class DeepCosplay(ChatGPTMessageHandler):
                         if words_response is None:
                             continue
 
-                        corelation_on_topic = json_obj.get('corelation_on_topic', 0.8)
-                        corelation_on_conversation = json_obj.get('corelation_on_conversation', 0.8)
+                        corelation_on_topic = float(json_obj.get('corelation_on_topic', 0.8))
+                        corelation_on_conversation = float(json_obj.get('corelation_on_conversation', 0.8))
 
-                        max_factor = 5
-                        min_factor = 1
+                        temp_interest_factor =  scale_to_reverse_exponential(
+                            corelation_on_topic, 1, 5, 0, 0.8) * scale_to_reverse_exponential(corelation_on_conversation, 1, 5, 0, 0.8)
 
-                        if corelation_on_topic <0.8:
-                            factor = max_factor - (max_factor - min_factor) * (corelation_on_topic - 0.8) / 0.8
-                            interest_factor = interest_factor * factor
-                        
-                        if corelation_on_conversation < 0.8:
-                            factor = max_factor - (max_factor - min_factor) * (corelation_on_conversation - 0.8) / 0.8
-                            interest_factor = interest_factor * factor
+                        if temp_interest_factor > interest_factor:
+                            interest_factor = temp_interest_factor
 
                         amiya_context = ChatGPTMessageContext(words_response, '阿米娅')
                         await self.send_message(response_with_mental)
@@ -339,4 +371,8 @@ class DeepCosplay(ChatGPTMessageHandler):
             message = f"{debug_info}\n{message}"
 
         messageChain = Chain().text(f'{message}')
+
+        if self.get_handler_config("silent_mode"):
+            return
+
         await self.instance.send_message(messageChain,channel_id=self.channel_id)
