@@ -5,6 +5,7 @@ import os
 import re
 import math
 import time
+import traceback
 
 from collections import Counter,deque
 from typing import List, Tuple
@@ -118,7 +119,7 @@ class ChatLogStorage():
 
                 non_empty_topic_count = len(recent_cluster) - non_empty_topic_count
 
-                self.debug_log(f'尝试判断Topic是否出现/继续存在: if {non_empty_topic_count}(当前新增聊天) >= {half_length}(最近聊天聚类)  当前话题:{topic_content}')
+                self.debug_log(f'尝试判断Topic是否出现/继续存在: if {non_empty_topic_count}(当前新增聊天) >= {half_length}(最近聊天聚类/2)  当前话题:{topic_content}')
 
                 if non_empty_topic_count >= half_length:
                     # 有一半以上元素没有被判断topic
@@ -160,7 +161,7 @@ class ChatLogStorage():
 
             except Exception as e:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                self.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
             
 
     def average_freq_per_user(self):

@@ -5,14 +5,19 @@ import os
 import re
 import math
 import time
+import traceback
 
 from typing import List, Tuple
 
 from amiyabot import Message, Chain
+
+from core.resource.arknightsGameData import ArknightsGameData, ArknightsGameDataResource
+
 from .core.ask_chat_gpt import ChatGPTDelegate
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance,ChatGPTMessageHandler
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
+
 
 from .util.string_operation import extract_json
 from .util.datetime_operation import calculate_timestamp_factor
@@ -32,6 +37,8 @@ class DeepCosplay(ChatGPTMessageHandler):
         self.reply_check = self.__reply_check_gen()
 
         asyncio.create_task(self.__amiya_loop())
+
+    ERROR_REPLY = '抱歉博士，阿米娅有点不明白。'
 
     def __reply_check_gen(self):
 
@@ -75,7 +82,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             
             except Exception as e:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                self.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
 
     def load_template(self,template_name:str):
 
@@ -170,8 +177,20 @@ class DeepCosplay(ChatGPTMessageHandler):
                     await self.ask_amiya(message_in_conversation,no_word_limit)
 
             except Exception as e:
-                self.debug_log(f'Unknown Error {e}')
+                self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
 
+    def merge_operator_detail(self,opt):
+        stories = opt.stories()
+        detail_text = f'干员:{opt.name}\n'
+        race_match = re.search(r'【种族】(.*?)\n', next(story["story_text"] for story in stories if story["story_title"] == "基础档案"))
+        if race_match:
+            race = race_match.group(1)
+        else:
+            race = "未知"
+        detail_text = detail_text + f'职业:{opt.type} 种族:{race}\n'
+        detail_text += next(story["story_text"] for story in stories if story["story_title"] == "客观履历")
+        
+        return detail_text
 
     def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=1000,distinguish_doc:bool= False) -> Tuple[list, str, list]:
 
@@ -188,7 +207,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 else:
                     text_to_append = f'博士:{context.text}'
             else:
-                if context.text != "抱歉博士，阿米娅有点不明白。":
+                if context.text != DeepCosplay.ERROR_REPLY:
                     text_to_append = f'阿米娅:{context.text}'
                 else:
                     text_to_append = ""
@@ -216,28 +235,38 @@ class DeepCosplay(ChatGPTMessageHandler):
             max_chatgpt_chars = 8000
             distinguish_doc = True
 
-        _,result,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)
+        _,doctor_talks,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)
 
         command = self.load_template('amiya-template-v1.txt')
 
-        command = command.replace("<<QUERY>>", result)
+        command = command.replace("<<QUERY>>", doctor_talks)
 
-        command = command.replace("<<Topic>>", self.amiya_topic)
+        command = command.replace("<<TOPIC>>", self.amiya_topic)
 
         max_prompt_chars = max_chatgpt_chars-len(command)
 
-        if no_word_limit:
-            word_limit_count = 1000
-        else:
+        word_limit_count = 1000
+        average_length = 0
+        if not no_word_limit:
             # 字数 最长是用户平均发言的2倍，方差1倍，高斯分布控制
             filtered_context_list = [context for context in context_list if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID]
             total_length = sum(len(context.text) for context in filtered_context_list)
-            average_length = total_length / len(filtered_context_list)
-            word_limit_count = int(random.gauss(average_length * 2, average_length))
+            if len(filtered_context_list)>0:
+                average_length = total_length / len(filtered_context_list)
+                word_limit_count = int(random.gauss(average_length * 2, average_length))
         
-        command = command.replace("<<WordCount>>", f'{word_limit_count}')
+        command = command.replace("<<WORD_COUNT>>", f'{word_limit_count}')
 
         self.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
+
+        # 拼入干员的客观履历
+        operator_detail = ""
+
+        for name,operator in ArknightsGameData.operators.items():
+            if name in doctor_talks:
+                operator_detail += '\n' + self.merge_operator_detail(operator)
+
+        command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_detail}')
 
         # 五分钟内的所有内容
         memory_in_time = self.storage.message_after(time.time()- 5 * 60)
@@ -295,7 +324,10 @@ class DeepCosplay(ChatGPTMessageHandler):
             successful_sent = False
             
             while retry_count < max_retries:
-                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
+                if self.get_handler_config("silent_mode"):
+                    success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,"gpt-3.5-turbo")
+                else:
+                    success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
 
                 # self.debug_log(f'ChatGPT原始回复:{response}')
 
@@ -343,16 +375,16 @@ class DeepCosplay(ChatGPTMessageHandler):
 
             if not successful_sent:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
-                await self.send_message('抱歉博士，阿米娅有点不明白。')
+                amiya_context = ChatGPTMessageContext(DeepCosplay.ERROR_REPLY, '阿米娅')
+                await self.send_message(DeepCosplay.ERROR_REPLY)
                 message_send.append(amiya_context)
                 return False, message_send,interest_factor
 
         except Exception as e:
             # 如果重试次数用完仍然没有成功，返回错误信息
-                self.debug_log(f'Unknown Error {e}')
-                amiya_context = ChatGPTMessageContext('抱歉博士，阿米娅有点不明白。', '阿米娅')
-                await self.send_message('抱歉博士，阿米娅有点不明白。')
+                self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
+                amiya_context = ChatGPTMessageContext(DeepCosplay.ERROR_REPLY, '阿米娅')
+                await self.send_message(DeepCosplay.ERROR_REPLY)
                 message_send.append(amiya_context)
                 return False, message_send,interest_factor
 
@@ -370,9 +402,22 @@ class DeepCosplay(ChatGPTMessageHandler):
         if self.get_handler_config("show_log_in_chat"):
             message = f"{debug_info}\n{message}"
 
+
         messageChain = Chain().text(f'{message}')
 
         if self.get_handler_config("silent_mode"):
+            sent_file = f'{curr_dir}/../../../resource/chatgpt/{self.channel_id}.txt'
+            with open(sent_file, 'a', encoding='utf-8') as file:
+                file.write('-'*20)
+                file.write('\n')
+                for msg in self.storage.recent_messages[-10:]:
+                    formatted_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(msg.timestamp))
+                    file.write(f'[{formatted_timestamp}]{msg.nickname}:{msg.text}\n')
+                formatted_current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                file.write(f'[{formatted_current_timestamp}]阿米娅(我):{message}\n')
             return
 
+        if message == DeepCosplay.ERROR_REPLY:
+            return
+        
         await self.instance.send_message(messageChain,channel_id=self.channel_id)
