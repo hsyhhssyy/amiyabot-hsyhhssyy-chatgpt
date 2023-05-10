@@ -79,25 +79,32 @@ class ChatLogStorage():
 
     async def __collect_topic(self):
 
-        eps = 120 # 单位是 秒
+        # 3.5 的API没必要考虑富哥问题
+        # eps = self.mediua_freq * (1 - 0.5 *random.random())  # 单位是 秒
+        eps = 120
 
         while True:
             await asyncio.sleep(2)
 
             min_samples = self.average_message_in_60_sec # 最少聚类
 
-            if min_samples < 5:
-                min_samples = 5
-            
-            
-            if min_samples > 20:
-                min_samples = 20
-                
-            self.debug_log(f'60秒内平均聊天:{self.average_message_in_60_sec}->最小取样:{min_samples}')
+            min_samples_factor = 5
 
+            # 3.5 的API没必要考虑富哥问题
+            # if self.bot.get_config("model",self.channel_id) == "gpt-4" and self.bot.get_config("im_rich",self.channel_id) != True:
+            #    min_samples_factor = 10
+
+            if min_samples < min_samples_factor:
+                min_samples = min_samples_factor
+            
+            if min_samples > 50:
+                min_samples = 50
+                
             clusters = dbscan(self.recent_messages, eps, min_samples)
 
-            if len(clusters) == 0:
+            self.debug_log(f'60秒内平均聊天{self.average_message_in_60_sec}: 最近Cluser长度:{len(clusters)} < 最小取样:{min_samples}')
+
+            if len(clusters) < min_samples/2:
                 continue
 
             recent_cluster = find_most_recent_cluster(clusters)

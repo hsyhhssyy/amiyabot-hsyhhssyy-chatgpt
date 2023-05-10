@@ -35,6 +35,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         self.interest : float = 0
 
         self.reply_check = self.__reply_check_gen()
+        self.direct_call_cooldown = self.__call_limit()
 
         asyncio.create_task(self.__amiya_loop())
 
@@ -93,7 +94,9 @@ class DeepCosplay(ChatGPTMessageHandler):
             self.debug_log(f'template select: {model} {template_filename}')
             if(model == "gpt-4"):
                 template_filename = "amiya-template-v2.txt"
-
+            else:
+                # 经过考虑，3.5版本也是用v2 prompt
+                template_filename = "amiya-template-v2.txt"
 
         with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
             content = file.read()
@@ -101,6 +104,24 @@ class DeepCosplay(ChatGPTMessageHandler):
 
     async def on_message(self, data: Message, force: bool = False):
         self.storage.enqueue(data)
+
+    def __call_limit(self):
+        call_count = 0
+        reset_time = time.time() + 3600
+
+        while True:
+            current_time = time.time()
+
+            # 检查是否需要重置计数器
+            if current_time >= reset_time:
+                call_count = 0
+                reset_time = current_time + 3600
+
+            # 更新调用次数
+            call_count += 1
+
+            # 如果调用次数小于等于4，则生成True，否则生成False
+            yield True if call_count <= 4 else False
 
     def generate_minimum_message_interval(self, factor:int):
         if factor < 20:
@@ -167,9 +188,12 @@ class DeepCosplay(ChatGPTMessageHandler):
                 
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
-                    self.debug_log(f'有Quote/Prefix，强制发话')
-                    should_talk = True
-                    no_word_limit = True
+                    if next(self.direct_call_cooldown):
+                        self.debug_log(f'有Quote/Prefix，强制发话')
+                        should_talk = True
+                        no_word_limit = True
+                    else:
+                        self.debug_log(f'有Quote/Prefix，但是Quora到达上限')
 
                 if should_talk:
                     last_talk = time.time()
@@ -232,8 +256,13 @@ class DeepCosplay(ChatGPTMessageHandler):
         distinguish_doc = False
 
         if self.bot.get_config("model",self.channel_id) == "gpt-4":
-            max_chatgpt_chars = 8000
-            distinguish_doc = True
+            if self.bot.get_config("im_rich",self.channel_id) != True:
+                max_chatgpt_chars = 4000
+                distinguish_doc = True
+            else:
+                max_chatgpt_chars = 8000
+                distinguish_doc = True
+
 
         _,doctor_talks,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)
 
@@ -324,10 +353,10 @@ class DeepCosplay(ChatGPTMessageHandler):
             successful_sent = False
             
             while retry_count < max_retries:
-                if self.get_handler_config("silent_mode"):
-                    success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,"gpt-3.5-turbo")
-                else:
-                    success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
+                # if self.get_handler_config("silent_mode"):
+                #     success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,"gpt-3.5-turbo")
+                # else:
+                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
 
                 # self.debug_log(f'ChatGPT原始回复:{response}')
 

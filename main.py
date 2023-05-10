@@ -9,15 +9,16 @@ from core import log
 
 from .src.supress_other_plugin import suppress_other_plugin
 from .src.core.ask_chat_gpt import ChatGPTDelegate
+from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.deep_cosplay import DeepCosplay
 from .src.ask_amiya import AskAmiya
-from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
+from .src.util.complex_math import frequency_controller
 
 curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.2.2',
+    version='3.2.3',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -78,11 +79,19 @@ async def check_talk(data: Message):
     if data.text.isdigit():
         return False,0
 
+    # 黑名单
+
+    black_list = bot.get_config('black_list',data.channel_id)
+    if black_list:
+        if data.user_id in black_list:
+            return False,0
+
     if 'chat' in data.text.lower():
         return True, 10
         
     if data.text.upper().startswith("CHATGPT请问"):
-        return True, 10
+        if next(frequency_controller):
+            return True, 10
     
     return True, -99999
 

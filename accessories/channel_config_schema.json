@@ -76,6 +76,11 @@
       "description":"选择要使用的gpt模型",
       "type": "string",
       "enum": ["gpt-3.5-turbo", "gpt-4"]
+    },
+    "black_list": {
+      "title":"黑名单",
+      "description":"这些人的话，兔兔会直接忽略，不记录也不响应。",
+      "type": "array"
     }
   },
   "required": [

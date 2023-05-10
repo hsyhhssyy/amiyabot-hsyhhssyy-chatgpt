@@ -1,8 +1,4 @@
 
-
-from datetime import datetime
-
-
 def calculate_timestamp_factor(time_a: float, time_b: float, max_factor=3.0, min_factor=1.0) -> float:
     if time_a is None or time_b is None:
         return min_factor

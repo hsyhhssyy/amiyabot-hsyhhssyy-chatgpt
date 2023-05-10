@@ -2,7 +2,12 @@
 
 ## 版本新功能
 
-**新增了一个总开关和频道独立开关，关闭后不再响应消息**
+**新增一些配置**
+
+新增了一个总开关和频道独立开关，关闭后不再响应消息。
+
+新增了一个黑名单列表（频道级别配置中），输入用户QQ号后，可以忽略该用户的消息。
+可以将其他机器人的QQ号填入其中防止机器人互相聊天。
 
 **3.2.0版是我自认为角色扮演模式调整的非常满意的一个版本，并且角色扮演对API的消耗已经很低了，非常建议您试一下，并给出反馈**
 
@@ -15,6 +20,10 @@
 我认为目前兔兔的角色扮演模式，已经可以完全取代经典模式，如果需要问专业问题，可以使用下面的ChatGPT请问关键词。
 
 **新增对GPT-4的支持，可以将api配置为GPT-4（如果你的账户有资格的话），如果这样做，将会使用一套新的Prompt来提供更好的表现。(但是注意钱包)**
+
+目前的兔兔角色扮演模式，在千人群中，使用GPT-4平均每天会消耗大约5-6美元的费用，使用GPT-3则会消耗0.4-0.5美元。
+
+模型切换为GPT-4时，会刻意压制兔兔说话的数量，降低API消耗，并为富哥增加一个全局配置项“我是富哥”，开启后，不再压制。此时每日消耗大搞10-20美元。
 
 此外，由于我已经转向GPT-4 API，所以仍在使用GPT-3.5 Turbo的用户可能不一定能做到兼顾。如果您仍在用GPT-3.5 Turbo，并觉得软件有什么问题，请您多多反馈，我会尽量想办法处理。
 
@@ -153,7 +162,36 @@ use_stop_words指示是否使用全局配置文件里的stop_words来检测并�
 
 对于有需要的用户，现在兔兔会统计每次发送ChatGPT请求时，消耗掉的API Token数量，并且可以分频道计算。
 您可以打开amiya_plugin数据库并访问amiyabot-hsyhhssyy-chatgpt-token-consume表来查询和统计。
+
 如果您使用收费token，并有分频道计费的需求，可以通过这个数据来实现。
+
+下面给大家一个SQL，可以用来计算花了多少钱，token_cost单位为美元。
+
+```SQL
+SELECT
+	cast( `consume`.`exec_time` AS date ) AS `exec_date`,
+	`consume`.`channel_id` AS `channel_id`,
+	`consume`.`model_name` AS `model_name`,
+	sum( `consume`.`total_tokens` ) AS `sum(total_tokens)`,
+	sum((
+		CASE
+				
+				WHEN ( `consume`.`model_name` = 'gpt-3.5-turbo' ) THEN
+				(( `consume`.`total_tokens` * 0.002 ) / 1000 ) 
+				WHEN ( `consume`.`model_name` = 'gpt-4' ) THEN
+				((( `consume`.`prompt_tokens` * 0.03 ) + ( `consume`.`completion_tokens` * 0.06 )) / 1000 ) ELSE 0 
+			END 
+			)) AS `token_cost` 
+	FROM
+		`amiyabot-hsyhhssyy-chatgpt-token-consume` `consume` 
+	GROUP BY
+		`consume`.`model_name`,
+		`consume`.`channel_id`,
+		cast( `consume`.`exec_time` AS date ) 
+	ORDER BY
+	`exec_date`,
+	`consume`.`channel_id`
+```
 
 ## 其他注意事项
 

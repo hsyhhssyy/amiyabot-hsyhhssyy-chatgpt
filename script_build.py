@@ -13,10 +13,10 @@ amiya_bot_plugin_paths = [
 ]
 
 command = sys.argv[1]
-index = int(sys.argv[2])
+index = int(sys.argv[2])-1
 
 if index >= len(amiya_bot_plugin_paths):
-    print("请输入正确的数字参数，范围为0到{}".format(len(amiya_bot_plugin_paths) - 1))
+    print("请输入正确的数字参数，范围为1到{}".format(len(amiya_bot_plugin_paths)))
     exit()
 
 amiya_bot_plugin_path = amiya_bot_plugin_paths[index]

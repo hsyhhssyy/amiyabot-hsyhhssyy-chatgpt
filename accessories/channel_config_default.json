@@ -23,7 +23,6 @@
       "show_log_in_chat":false
     },
     "model": "gpt-3.5-turbo",
-    "show_log_in_chat": false
-    
+    "black_list":[]
   }
   
