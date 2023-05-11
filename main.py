@@ -18,7 +18,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.2.3',
+    version='3.2.4',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -83,7 +83,8 @@ async def check_talk(data: Message):
 
     black_list = bot.get_config('black_list',data.channel_id)
     if black_list:
-        if data.user_id in black_list:
+        if str(data.user_id) in black_list:
+            bot.debug_log(f'[{data.channel_id:<10}]用户被黑名单屏蔽: {data.user_id}')
             return False,0
 
     if 'chat' in data.text.lower():

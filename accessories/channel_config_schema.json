@@ -73,9 +73,9 @@
     },
     "model": {
       "title":"GPT模型",
-      "description":"选择要使用的gpt模型",
+      "description":"选择要使用的gpt模型(注意钱包)",
       "type": "string",
-      "enum": ["gpt-3.5-turbo", "gpt-4"]
+      "enum": ["gpt-3.5-turbo","gpt-3.5/4 Mixed", "gpt-4"]
     },
     "black_list": {
       "title":"黑名单",

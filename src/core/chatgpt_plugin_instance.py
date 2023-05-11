@@ -1,5 +1,5 @@
 import os
-import asyncio
+import time
 
 from typing import Optional, Union
 
@@ -56,6 +56,32 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
         ...
 
+quota = 0
+
+def call_limit():
+    call_count = 0
+    reset_time = time.time() + 3600
+
+    while True:
+        current_time = time.time()
+
+        # 检查是否需要重置计数器
+        if current_time >= reset_time:
+            call_count = 0
+            reset_time = current_time + 3600
+
+        # 更新调用次数
+        call_count += 1
+        
+        global quota
+        
+        if not quota:
+            quota = 4
+
+        # 如果调用次数小于等于4，则生成True，否则生成False
+        yield True if call_count <= quota else False
+
+call_limit_gen = call_limit()
 
 class ChatGPTMessageHandler():
     def __init__(self, bot:ChatGPTPluginInstance,delegate:ChatGPTDelegate, channel_id,handler_conf_key,instance=None) -> None:
@@ -90,3 +116,26 @@ class ChatGPTMessageHandler():
         
         self.debug_log(f'[GetConfig]{configName} : None')
         return default
+    
+
+
+    def get_model_with_quota(self)->str:
+        """决定要使用的Model，如果Quora超限则返回3.5"""
+
+        model = self.bot.get_config("model",self.channel_id)
+
+        if model == 'gpt-3.5 turbo':
+            return model
+
+        global quota
+        quota = self.bot.get_config("gpt_4_quota")
+
+        global call_limit_gen
+
+        if next(call_limit_gen):
+            return 'gpt-4'
+        else:
+            if model == 'gpt-3.5/4 Mixed':
+                return 'gpt-3.5-turbo'
+            else:
+                return None

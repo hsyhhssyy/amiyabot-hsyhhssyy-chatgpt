@@ -54,16 +54,17 @@ class ChatGPTDelegate:
             self.bot.debug_log(f"proxy set: {proxy}")
             openai.proxy = proxy
 
+        if model is None:
+            model = self.get_config('model', channel_id) or "gpt-3.5-turbo"
+
         base_url = self.get_config('base_url', channel_id)
         if base_url:
-            self.bot.debug_log(f"base_url set: {base_url}")
             openai.api_base = base_url
 
         response = None
 
-        if model is None:
-            model = self.get_config('model', channel_id) or "gpt-3.5-turbo"
-
+        self.bot.debug_log(f"base_url: {base_url} proxy: {proxy} model: {model}")
+        
         combined_message = ''.join(obj['content'] for obj in prompt)
 
         try:

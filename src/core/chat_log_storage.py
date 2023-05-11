@@ -19,7 +19,7 @@ from ..core.message_context import ChatGPTMessageContext
 from ..core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from ..core.ask_chat_gpt import ChatGPTDelegate
 
-from ..util.string_operation import extract_json
+from ..util.string_operation import extract_json,convert_to_float
 from ..util.complex_math import find_most_recent_cluster,dbscan
 
 curr_dir = os.path.dirname(__file__)
@@ -102,15 +102,12 @@ class ChatLogStorage():
                 
             clusters = dbscan(self.recent_messages, eps, min_samples)
 
-            self.debug_log(f'60秒内平均聊天{self.average_message_in_60_sec}: 最近Cluser长度:{len(clusters)} < 最小取样:{min_samples}')
-
-            if len(clusters) < min_samples/2:
+            if len(clusters) <=0:
                 continue
-
+        
             recent_cluster = find_most_recent_cluster(clusters)
-            
-            # self.debug_log(f'clusters:\n{self.messages_to_string(clusters)}')
-            self.debug_log(f'最近聊天聚类长度:{len(recent_cluster)}')
+
+            self.debug_log(f'60秒内平均聊天{self.average_message_in_60_sec}: Cluster数量:{len(clusters)} 最近Cluser长度:{len(recent_cluster)} 最小取样:{min_samples}')
 
             if recent_cluster and len(recent_cluster)>=self.average_message_in_60_sec:
                 # 计算列表长度的一半
@@ -130,8 +127,12 @@ class ChatLogStorage():
 
                 if non_empty_topic_count >= half_length:
                     # 有一半以上元素没有被判断topic
-                    success ,topic = await self.check_conversation(recent_cluster)
-                    
+                    try:
+                        success ,topic = await self.check_conversation(recent_cluster)
+                    except Exception as e:
+                        self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
+                        success = False
+
                     if success and topic is not None and topic != ChatLogStorage.NoTopic:
                         if self.topic != topic:                        
                             self.debug_log(f'新话题诞生:{topic}')
@@ -237,12 +238,12 @@ class ChatLogStorage():
         for json_obj in json_objects:
             if json_obj.get('conversation', False) == True:
 
-                probability = float(json_obj.get('probability', 0))
+                probability = float(convert_to_float(json_obj.get('probability', 0)))
 
                 if probability < 0.8:
                     return False,""
 
-                similarity = float(json_obj.get('similarity', 0))
+                similarity = float(convert_to_float(json_obj.get('similarity', 0)))
                 
                 if topic_content is not None and similarity >= 0.8:
                     return True,topic_content

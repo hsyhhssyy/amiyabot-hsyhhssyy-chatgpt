@@ -35,7 +35,6 @@ class DeepCosplay(ChatGPTMessageHandler):
         self.interest : float = 0
 
         self.reply_check = self.__reply_check_gen()
-        self.direct_call_cooldown = self.__call_limit()
 
         asyncio.create_task(self.__amiya_loop())
 
@@ -85,43 +84,12 @@ class DeepCosplay(ChatGPTMessageHandler):
                 # 如果重试次数用完仍然没有成功，返回错误信息
                 self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
 
-    def load_template(self,template_name:str):
 
-        template_filename = template_name
-
-        if template_name.startswith("amiya-template"):
-            model = self.bot.get_config('model', self.channel_id)
-            self.debug_log(f'template select: {model} {template_filename}')
-            if(model == "gpt-4"):
-                template_filename = "amiya-template-v2.txt"
-            else:
-                # 经过考虑，3.5版本也是用v2 prompt
-                template_filename = "amiya-template-v2.txt"
-
-        with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
-            content = file.read()
-        return content
 
     async def on_message(self, data: Message, force: bool = False):
         self.storage.enqueue(data)
 
-    def __call_limit(self):
-        call_count = 0
-        reset_time = time.time() + 3600
-
-        while True:
-            current_time = time.time()
-
-            # 检查是否需要重置计数器
-            if current_time >= reset_time:
-                call_count = 0
-                reset_time = current_time + 3600
-
-            # 更新调用次数
-            call_count += 1
-
-            # 如果调用次数小于等于4，则生成True，否则生成False
-            yield True if call_count <= 4 else False
+    
 
     def generate_minimum_message_interval(self, factor:int):
         if factor < 20:
@@ -188,17 +156,16 @@ class DeepCosplay(ChatGPTMessageHandler):
                 
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
-                    if next(self.direct_call_cooldown):
-                        self.debug_log(f'有Quote/Prefix，强制发话')
-                        should_talk = True
-                        no_word_limit = True
-                    else:
-                        self.debug_log(f'有Quote/Prefix，但是Quora到达上限')
+                    self.debug_log(f'有Quote/Prefix，强制发话')
+                    should_talk = True
+                    no_word_limit = True
 
                 if should_talk:
                     last_talk = time.time()
-
-                    await self.ask_amiya(message_in_conversation,no_word_limit)
+                    
+                    model = self.get_model_with_quota()
+                    if model is not None:
+                        await self.ask_amiya(message_in_conversation,no_word_limit,model)
 
             except Exception as e:
                 self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
@@ -250,23 +217,31 @@ class DeepCosplay(ChatGPTMessageHandler):
         return request_obj, result, picked_context
 
     # 根据一大堆话生成一个回复
-    async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool=False) -> str:
+    async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool,model:str) -> bool:
         max_prompt_chars = 1000
         max_chatgpt_chars = 4000
         distinguish_doc = False
 
-        if self.bot.get_config("model",self.channel_id) == "gpt-4":
-            if self.bot.get_config("im_rich",self.channel_id) != True:
-                max_chatgpt_chars = 4000
-                distinguish_doc = True
-            else:
-                max_chatgpt_chars = 8000
-                distinguish_doc = True
+        if model is None:
+            return
 
+        if  model == "gpt-4":
+            max_chatgpt_chars = 8000
+            distinguish_doc = True
+        else:
+            return False
 
-        _,doctor_talks,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)
+        _,doctor_talks,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
 
-        command = self.load_template('amiya-template-v1.txt')
+        if(model == "gpt-4"):
+            template_filename = "amiya-template-v3.txt"
+        else:
+            template_filename = "amiya-template-v2.txt"
+
+        self.debug_log(f'template select: {model} {template_filename}')
+
+        with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
+            command = file.read()
 
         command = command.replace("<<QUERY>>", doctor_talks)
 
@@ -274,7 +249,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         max_prompt_chars = max_chatgpt_chars-len(command)
 
-        word_limit_count = 1000
+        word_limit_count = 100
         average_length = 0
         if not no_word_limit:
             # 字数 最长是用户平均发言的2倍，方差1倍，高斯分布控制
@@ -282,8 +257,11 @@ class DeepCosplay(ChatGPTMessageHandler):
             total_length = sum(len(context.text) for context in filtered_context_list)
             if len(filtered_context_list)>0:
                 average_length = total_length / len(filtered_context_list)
-                word_limit_count = int(random.gauss(average_length * 2, average_length))
+                word_limit_count = int(random.gauss(average_length*2, average_length))
         
+        if word_limit_count<20:
+            word_limit_count = 20
+
         command = command.replace("<<WORD_COUNT>>", f'{word_limit_count}')
 
         self.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
@@ -308,7 +286,11 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         command = command.replace("<<MEMORY>>", memory_str)
 
-        success , message_send, content_factor = await self.get_amiya_response(command, self.channel_id)
+        try:
+            success , message_send, content_factor = await self.get_amiya_response(command, self.channel_id,model)
+        except Exception as e:
+            self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
+            return False
 
         interest_decrease = random.randint(50, 100)
 
@@ -330,9 +312,12 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return True
 
-    async def get_amiya_response(self, command: str, channel_id: str) -> Tuple[bool, List[ChatGPTMessageContext],float]:
+    async def get_amiya_response(self, command: str, channel_id: str,model:str) -> Tuple[bool, List[ChatGPTMessageContext],float]:
 
-        if self.bot.get_config("model",self.channel_id) == "gpt-4":
+        if model is None:
+            return
+
+        if model == "gpt-4":
             max_retries = 1
         else:
             max_retries = 3
@@ -356,7 +341,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 # if self.get_handler_config("silent_mode"):
                 #     success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,"gpt-3.5-turbo")
                 # else:
-                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id)
+                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,model=model)
 
                 # self.debug_log(f'ChatGPT原始回复:{response}')
 
@@ -365,6 +350,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
                 words_response = None
                 response_with_mental = None
+
                 for json_obj in json_objects:
                     if json_obj.get('role', None) == '阿米娅':
                         words_response = json_obj.get('reply', None)
@@ -387,14 +373,19 @@ class DeepCosplay(ChatGPTMessageHandler):
                             interest_factor = temp_interest_factor
 
                         amiya_context = ChatGPTMessageContext(words_response, '阿米娅')
-                        await self.send_message(response_with_mental)
+                        await self.send_message(response_with_mental,model)
                         message_send.append(amiya_context)
                         successful_sent = True
 
                         if self.get_handler_config('output_activity', False) == True:
                             activity = json_obj.get('activity', None)
                             if activity is not None and activity != "":
-                                await self.send_message(f'({activity})')
+                                await self.send_message(f'({activity})',model)
+                        
+                        if len(message_send) > 3:
+                            # 有时候， API会发疯一样的返回N多行，这里检测到超过3句话就强制拦截不让他说了
+                            # 尤其用3.5的时候更是这样
+                            break
 
                 if successful_sent:
                     break
@@ -404,46 +395,47 @@ class DeepCosplay(ChatGPTMessageHandler):
 
             if not successful_sent:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                amiya_context = ChatGPTMessageContext(DeepCosplay.ERROR_REPLY, '阿米娅')
-                await self.send_message(DeepCosplay.ERROR_REPLY)
-                message_send.append(amiya_context)
                 return False, message_send,interest_factor
 
+        
+            if self.get_handler_config("silent_mode"):
+                formatted_file_timestamp = time.strftime('%Y%m%d', time.localtime(time.time()))
+                sent_file = f'{curr_dir}/../../../resource/chatgpt/{self.channel_id}.{formatted_file_timestamp}.txt'
+                with open(sent_file, 'a', encoding='utf-8') as file:
+                    file.write('-'*20)
+                    file.write('\n')
+                    for msg in self.storage.recent_messages[-10:]:
+                        formatted_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(msg.timestamp))
+                        file.write(f'[{formatted_timestamp}]{msg.nickname}:{msg.text}\n')
+
+                    debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest}}}'
+                    formatted_current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                    file.write(f'[{formatted_current_timestamp}]{debug_info}\n')
+                    for msg in message_send:
+                        file.write(f'[{formatted_current_timestamp}]阿米娅(我):{msg.text}\n')
+
         except Exception as e:
-            # 如果重试次数用完仍然没有成功，返回错误信息
-                self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
-                amiya_context = ChatGPTMessageContext(DeepCosplay.ERROR_REPLY, '阿米娅')
-                await self.send_message(DeepCosplay.ERROR_REPLY)
-                message_send.append(amiya_context)
-                return False, message_send,interest_factor
+            self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
+            return False, message_send,interest_factor
+        
 
         return True, message_send,interest_factor
 
     # 发送消息到指定频道
-    async def send_message(self, message: str):
+    async def send_message(self, message: str, model:str = None):
         if message is None:
             return
 
-        debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest}}}'
+        debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest},Model:{model}}}'
 
         self.debug_log(f'show_log_in_chat:{self.get_handler_config("show_log_in_chat")}')
 
         if self.get_handler_config("show_log_in_chat"):
             message = f"{debug_info}\n{message}"
 
-
         messageChain = Chain().text(f'{message}')
 
         if self.get_handler_config("silent_mode"):
-            sent_file = f'{curr_dir}/../../../resource/chatgpt/{self.channel_id}.txt'
-            with open(sent_file, 'a', encoding='utf-8') as file:
-                file.write('-'*20)
-                file.write('\n')
-                for msg in self.storage.recent_messages[-10:]:
-                    formatted_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(msg.timestamp))
-                    file.write(f'[{formatted_timestamp}]{msg.nickname}:{msg.text}\n')
-                formatted_current_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-                file.write(f'[{formatted_current_timestamp}]阿米娅(我):{message}\n')
             return
 
         if message == DeepCosplay.ERROR_REPLY:

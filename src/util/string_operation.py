@@ -26,6 +26,21 @@ def extract_json(string: str) -> List[Dict[str, Any]]:
 
     return json_objects
 
+def convert_to_float(value):
+    if isinstance(value, str):
+        if value == '非常高':
+            return 1.0
+        elif value == '高':
+            return 0.8
+        elif value == '中':
+            return 0.5
+        elif value == '低':
+            return 0.0
+        else:
+            return 0.0
+    else:
+        return float(value)
+
 
 # input_string = "博士：兔兔你好。{\"reply\": \"你好博士。\", \"mental\": \"\", \"activity\": \"\"}"
 

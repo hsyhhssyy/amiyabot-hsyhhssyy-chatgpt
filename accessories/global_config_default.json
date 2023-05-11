@@ -29,7 +29,8 @@
     "model": "gpt-3.5-turbo",
     "black_list":[],
     "show_log": false,
-    "silent_mode": false
+    "silent_mode": false,
+    "gpt_4_quota":5
     
   }
   
