@@ -1,19 +1,28 @@
 import time
 
 from typing import List, Tuple
-
+from amiyabot.adapters.cqhttp import CQHttpBotInstance
 from amiyabot import Message, Chain
 
 prefix = ['阿米娅', '阿米兔', '兔兔', '兔子', '小兔子', 'Amiya', 'amiya']
 
 def get_quote_id(data):
     message = data.message
-    if 'messageChain' in message.keys():
+    if type(data.instance) == CQHttpBotInstance and 'message' in message.keys():
+        if len(message['message']) >= 2:
+            # print(f'{message}')
+            if message['message'][0]['type'] == 'reply' and message['message'][1]['type'] == 'at':
+                if f"{message['message'][1]['data']['qq']}" == f'{data.instance.appid}':
+                    # print(f"is quote {message['message'][0]['data']['id']}")
+                    return message['message'][0]['data']['id']
+    elif 'messageChain' in message.keys():
         for msg in message['messageChain']:
             if msg['type']=='Quote':
                 sender = msg['senderId']
                 if f'{sender}' == f'{data.instance.appid}':
+                    # print(f"is quote {msg['id']}")
                     return msg['id']
+    return 0
 
 def format_request(text):
     # 首先移除先导关键词
@@ -49,7 +58,7 @@ class ChatGPTMessageContext:
         context.user_id = data.user_id
 
         context.is_prefix = data.text_original.startswith(tuple(prefix))
-        context.is_quote = get_quote_id(data) is not None
+        context.is_quote = get_quote_id(data) != 0
         return context
 
     @classmethod

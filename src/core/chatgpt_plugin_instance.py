@@ -8,6 +8,7 @@ from amiyabot.log import LoggerManager
 from core import log
 from core.util import read_yaml
 from core.customPluginInstance import AmiyaBotPluginInstance
+from .message_context import get_quote_id
 
 from .ask_chat_gpt import ChatGPTDelegate
 
@@ -39,18 +40,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             logger.info(f'{message}')
 
     def get_quote_id(self, data):
-        message = data.message
-        if 'messageChain' in message.keys():
-            for msg in message['messageChain']:
-                self.debug_log(f'{msg}')
-                if msg['type']=='Quote':
-                    sender = msg['senderId']
-                    self.debug_log(f'{sender}')
-                    if f'{sender}' == f'{data.instance.appid}':
-                        self.debug_log('find quote')
-                        return msg['id']
-        
-        return 0
+        return get_quote_id(data)
 
     def ask_amiya( prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
                      use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
