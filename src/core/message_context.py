@@ -57,7 +57,8 @@ class ChatGPTMessageContext:
         # context = cls(format_request(data.text_original), data.nickname)
         context.user_id = data.user_id
 
-        context.is_prefix = data.text_original.startswith(tuple(prefix))
+        
+        context.is_prefix = data.is_at or data.text_original.startswith(tuple(prefix))
         context.is_quote = get_quote_id(data) != 0
         return context
 

@@ -86,7 +86,6 @@ class ChatGPTMessageHandler():
         if show_log == True:
             logger.info(f'[{self.channel_id:<10}]{message}')
 
-
     def get_handler_config(self, configName, default = None):
         handler_conf = self.bot.get_config(self.handler_conf_key,self.channel_id)
 
@@ -107,7 +106,30 @@ class ChatGPTMessageHandler():
         self.debug_log(f'[GetConfig]{configName} : None')
         return default
     
+    def set_handler_config(self, configName, configValue, channel_id=None):
+        # 获取当前的handler配置
+        handler_conf = self.bot.get_config(self.handler_conf_key, self.channel_id)
 
+        # 如果handler配置不存在，则创建一个新的空字典
+        if handler_conf is None:
+            handler_conf = {}
+
+        # 更新配置值
+        handler_conf[configName] = configValue
+
+        # 存储更新后的handler配置
+        self.bot.set_config(self.handler_conf_key, handler_conf, channel_id)
+
+        # 检查和确认新的配置值
+        new_handler_conf = self.bot.get_config(self.handler_conf_key, self.channel_id)
+
+        if configName in new_handler_conf.keys():
+            if new_handler_conf[configName] == configValue:
+                self.debug_log(f'[SetConfig]{configName} : {new_handler_conf[configName]}')
+            else:
+                self.debug_log(f'[SetConfig] Failed to set {configName}')
+        else:
+            self.debug_log(f'[SetConfig] {configName} not found in config')
 
     def get_model_with_quota(self)->str:
         """决定要使用的Model，如果Quora超限则返回3.5"""

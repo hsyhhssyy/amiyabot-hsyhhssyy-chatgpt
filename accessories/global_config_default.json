@@ -23,6 +23,13 @@
         "output_activity":false,
         "show_log_in_chat":false
     },
+    "trpg_mode_config":{
+      "pc_name_mapping":"",
+      "env_info":[],
+      "item_info":[],
+      "loc_info":[],
+      "curr_loc":""
+    },
     "override_other_plugin": false,
     "base_url": "https://api.openai.com/v1",
     "proxy": "",

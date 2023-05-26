@@ -27,7 +27,7 @@ curr_dir = os.path.dirname(__file__)
 logger = LoggerManager('ChatGPT')
 
 class ChatLogStorage():
-    def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id):
+    def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id,collect_data:bool = True):
         self.recent_messages: List[ChatGPTMessageContext] = []
         self.bot = bot
         self.delegate = delegate
@@ -38,7 +38,8 @@ class ChatLogStorage():
         
         self.topic = None
 
-        self.__collect_data()
+        if collect_data:
+            self.__collect_data()
 
     NoTopic = 'NOTOPIC'
 
@@ -257,9 +258,10 @@ class ChatLogStorage():
 
         return False,""
 
-    def enqueue(self, data: Message):
+    def enqueue(self, data: Message) -> ChatGPTMessageContext:
         message_context = ChatGPTMessageContext.from_message(data)
         self.recent_messages.append(message_context)
+        return message_context
 
     def message_after(self,timestamp:float) -> List[ChatGPTMessageContext]:
         result = []

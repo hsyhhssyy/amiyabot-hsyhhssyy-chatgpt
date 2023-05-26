@@ -16,7 +16,7 @@
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
       "type": "string",
-      "enum": ["经典模式", "角色扮演"]
+      "enum": ["经典模式", "角色扮演","跑团模式"]
     },
     "normal_mode_config": {
       "title":"经典模式",
@@ -73,6 +73,56 @@
           "title":"静默测试",
           "description":"开启以后，插件会正常执行所有功能，但是在发送消息那一步什么都不发送，可以用来提前测试兔兔AI在群内的可能效果",
           "type": "boolean"
+        }
+      }
+    },
+    "trpg_mode_config": {
+      "type": "object",
+      "title":"跑团模式",
+      "properties": {
+        "pc_name_mapping": {
+          "title":"PC名称映射",
+          "description":"映射PC的名称",
+          "type": "string"
+        },
+        "kp_id": {
+          "title":"KP的Id",
+          "description":"记录KP的Id",
+          "type": "string"
+        },
+        "my_id": {
+          "title":"我的Id",
+          "description":"记录我的Id",
+          "type": "string"
+        },
+        "env_info": {
+          "title":"世界观情报",
+          "description":"世界观情报",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "item_info": {
+          "title":"物品情报",
+          "description":"物品情报",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "loc_info": {
+          "title":"地点情报",
+          "description":"物品情报",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "curr_loc":{
+          "title":"当前地点",
+          "description":"当前地点",
+          "type": "string"
         }
       }
     },

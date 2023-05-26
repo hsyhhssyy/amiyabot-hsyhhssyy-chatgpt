@@ -11,6 +11,7 @@ from .src.supress_other_plugin import suppress_other_plugin
 from .src.core.ask_chat_gpt import ChatGPTDelegate
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.deep_cosplay import DeepCosplay
+from .src.trpg import TRPGMode
 from .src.ask_amiya import AskAmiya
 from .src.util.complex_math import frequency_controller
 
@@ -18,7 +19,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.3.1',
+    version='3.3.3',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -138,13 +139,27 @@ async def _(data: Message):
             return
 
         await context.on_message(data,prefixed_call)
+    elif mode == "跑团模式" and data.channel_id is not None:
+        try:
+            context = channel_hander_context.get(data.channel_id)
+            if context is None or not isinstance(context, TRPGMode):
+                context = TRPGMode(bot,delegate,data.channel_id,data.instance)
+                channel_hander_context[data.channel_id] = context
+        except Exception as e:
+            log.error(e)
+            return
+
+        await context.on_message(data,prefixed_call)
     else:
+        channel = data.channel_id
+        if channel is None:
+            channel = f'User:{data.user_id}'
         if prefixed_call or data.channel_id is None:
             try:
-                context = channel_hander_context.get(data.channel_id)
+                context = channel_hander_context.get(channel)
                 if context is None or not isinstance(context, AskAmiya):
-                    context = AskAmiya(bot,delegate,data.channel_id)
-                    channel_hander_context[data.channel_id] = context
+                    context = AskAmiya(bot,delegate,channel)
+                    channel_hander_context[channel] = context
             except Exception as e:
                 log.error(e)
                 return
