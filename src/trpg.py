@@ -8,7 +8,7 @@ import math
 import time
 import traceback
 
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from amiyabot import Message, Chain
 
@@ -91,7 +91,7 @@ class TRPGMode(ChatGPTMessageHandler):
         if conf == "my_id" or conf == "kp_id" or conf == "env_info" or conf == "curr_loc":
             return self.set_handler_config(conf,value)
 
-    async def on_message(self, data: Message, force: bool = False):
+    async def on_message(self, data: Message):
         
         # 如果这是一个控制命令，则不进行处理
         if await self.check_command(data):
@@ -104,13 +104,16 @@ class TRPGMode(ChatGPTMessageHandler):
         last_talk = time.time()
 
         while True:
-            await asyncio.sleep(1)
+            await asyncio.sleep(5)
 
             try:
 
                 talks = self.storage.message_after(last_talk)
 
-                last_talk = talks[:-1][0].timestamp
+                if talks is None or len(talks)==0:
+                    continue
+
+                self.debug_log(f'talks:{talks}')
 
                 response_sent = False
 
@@ -140,11 +143,16 @@ class TRPGMode(ChatGPTMessageHandler):
                         await self.instance.send_message(Chain().text(f'阿米娅好像想要说点什么...'),channel_id=self.channel_id)
                         await self.response_to_pc()
                         await self.organize_inventory()
+                        response_sent = True
+
+                if response_sent == True:
+                    last_talk = talks[-1].timestamp
 
             except Exception as e:
+                last_talk = time.time()
                 self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
 
-    def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=1000) -> Tuple[list, str, list]:
+    def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=4000) -> Tuple[list, str, list]:
 
         request_obj = []
         
@@ -228,114 +236,104 @@ class TRPGMode(ChatGPTMessageHandler):
 
         return False
 
-    async def response_to_pc(self):
-
-        # 读取Template
-        template_filename = "amiya-trpg-v0.txt"
-        self.debug_log(f'template select: GPT-4 {template_filename}')
+    async def read_template(self,template_filename)->str:
         with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
             command = file.read()
+            return command
 
-        max_prompt_chars = 4000
+    async def generate_prompt_shard(self) -> Dict[str,str]:
+
+        prompt_shards:Dict[str,str] = {}
 
         context_list = self.storage.message_after(self.last_process_time)
         self.last_process_time = time.time()
 
         self.debug_log(f'{context_list}')
 
-        _,doctor_talks,_ = self.pick_prompt(context_list,max_prompt_chars)
+        _, doctor_talks, _ = self.pick_prompt(context_list)
 
-        command = command.replace("<<QUERY>>", doctor_talks)
-                
+        prompt_shards["<<QUERY>>"] = doctor_talks
+
         curr_loc = self.get_config('curr_loc')
         if curr_loc is None:
             curr_loc = ""
-        command = command.replace("<<CURRENTLOCATION>>", curr_loc)
+
+        prompt_shards["<<CURRENTLOCATION>>"] = curr_loc
 
         loc_info = self.get_config('loc_info')
-        command = command.replace("<<LOCATION>>", json.dumps(loc_info, ensure_ascii=False))
+        prompt_shards["<<LOCATION>>"] = json.dumps(
+            loc_info, ensure_ascii=False)
+
+        item_info = self.get_config('item_info')
+        prompt_shards["<<INVENTORY>>"] = json.dumps(
+            item_info, ensure_ascii=False)
+
+        env_info = self.get_config('env_info')
+        prompt_shards["<<INFORMATION>>"] = "\n".join(env_info)
+
+        return prompt_shards
+
+    async def format_template(self,template:str,shard:Dict[str,str]):
+        command = await self.read_template(template)
         
-        item_info = self.get_config('item_info')  
-        command = command.replace("<<INVENTORY>>", json.dumps(item_info, ensure_ascii=False))
+        for key,val in shard.items():
+            command = command.replace(key, val)
+        
+        return command
+            
+    async def response_to_pc(self):
 
-        env_info = self.get_config('env_info')        
-        command = command.replace("<<INFORMATION>>", "\n".join(env_info))
+        prompt_shards = await self.generate_prompt_shard()
+        command = await self.format_template("trpg-templates/amiya-trpg-v0.txt",prompt_shards)
 
-        # 添加记忆
-        _,message_send = await self.get_amiya_response(command)
+        success,json_objects = await self.delegate.ask_chatgpt_with_json(command,self.channel_id, self.get_model_with_quota())
+        
+        if not success:
+            return
+        
+        amiya_reply = next((json_obj for json_obj in json_objects if json_obj.get('role', None) == '阿米娅'), None)
+        replies = amiya_reply.get('replys', [])
 
-        for amiya_context in message_send:
+        for reply in replies:
+            await self.instance.send_message(Chain().text(f'{reply}'), channel_id=self.channel_id)
+            amiya_context = ChatGPTMessageContext(reply, '阿米娅')
             self.storage.recent_messages.append(amiya_context)
 
-    async def get_amiya_response(self, command: str) -> Tuple[bool, List[ChatGPTMessageContext],float]:
-
-        model = self.get_model_with_quota()
-
-        if model == "gpt-4":
-            max_retries = 1
-        else:
-            max_retries = 3
+        self.process_response_json(amiya_reply)
         
-        retry_count = 0 
+        # ------------------- 单独用Prompt处理信息 -----------------------
 
-        self.debug_log(f'ChatGPT Max Retry: {max_retries}')
+        command = await  self.format_template("trpg-templates/amiya-template-trpg-process-info.txt",prompt_shards)
 
-        message_send = []
-
-        try:
+        success,json_objects = await self.delegate.ask_chatgpt_with_json(command,self.channel_id, self.get_model_with_quota())
+        if not success or len(json_objects) < 1:
+            return
         
-            successful_sent = False
-            
-            while retry_count < max_retries:
+        json_object = json_objects[0]
 
-                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], self.channel_id,model=model)
+        env_info = self.get_config('env_info')
+        env_info_gain = json_object.get('env_info_gain', None)
+        env_info.extend(env_info_gain)        
 
-                if success:
-                    
-                    # 出于调试目的，写入请求数据
-                    formatted_file_timestamp = time.strftime('%Y%m%d', time.localtime(time.time()))
-                    sent_file = f'{curr_dir}/../../../resource/chatgpt/{self.channel_id}.{formatted_file_timestamp}.txt'
-                    with open(sent_file, 'a', encoding='utf-8') as file:
-                        file.write('-'*20)
-                        formatted_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-                        file.write(f'{formatted_timestamp}')
-                        file.write('-'*20)
-                        file.write('\n')
-                        file.write(f'{command}')
-                        file.write('\n')
-                        file.write('-'*20)
-                        file.write('\n')
-                        file.write(f'{response}')
-                        file.write('\n')
+        env_info_remove = json_object.get('env_info_remove', None)
+        if env_info_remove is not None:
+            for item in env_info_remove:
+                if item in env_info:
+                    env_info.remove(item)      
+        self.set_config('env_info',env_info) 
 
-                    json_objects = extract_json(response)
+        message = ""
 
-                    for json_obj in json_objects:
-                        if json_obj.get('role', None) == '阿米娅':
-                            
-                            successful_sent = await self.process_response_json(json_obj)                
-                            
-                            if len(message_send) > 3:
-                                # 有时候， API会发疯一样的返回N多行，这里检测到超过3句话就强制拦截不让他说了
-                                # 尤其用3.5的时候更是这样
-                                break
-
-                if successful_sent:
-                    break
-                else:
-                    self.debug_log(f'未读到Json，重试第{retry_count+1}次')
-                    retry_count += 1
-
-            if not successful_sent:
-                # 如果重试次数用完仍然没有成功，返回错误信息
-                return False,message_send
-
-        except Exception as e:
-            self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
-            return False,message_send
+        if len(env_info_gain) > 0:
+            message = f"新增世界观情报: {','.join(env_info_gain)}"
         
-        return True,message_send
-    
+        if len(env_info_remove) > 0:
+            remove_message = f"移除世界观情报: {','.join(env_info_remove)}"
+            message += f"\n{remove_message}"
+        
+        if message != "":
+            await self.instance.send_message(Chain().text(f'({message})'), channel_id=self.channel_id)
+
     async def process_response_json(self,json_obj):
         # {
         #     "reply": "明白了，今晚就在这里休息。如果有怪物靠近，我们的屏蔽器会警告我们。在这之前，我想我们应该设立一些警戒机制，比如在可能的入口放置一些暗示，以便于在怪物接近时我们可以得到警告。",
@@ -362,8 +360,6 @@ class TRPGMode(ChatGPTMessageHandler):
         #     }
         # }
 
-        reply = json_obj["reply"]
-        await self.instance.send_message(Chain().text(f'{reply}'),channel_id=self.channel_id)
         
         # 更新物品
         item_info = self.get_config('item_info')  
@@ -404,15 +400,6 @@ class TRPGMode(ChatGPTMessageHandler):
             await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
         
         self.set_config('item_info',item_info)  
-
-        env_info = self.get_config('env_info')  
-        env_info_gain = json_obj["env_info_gain"]
-        env_info.extend(env_info_gain)        
-        self.set_config('env_info',env_info) 
-
-        if len(env_info_gain)>0:
-            message = f"新增世界观情报:{','.join(env_info_gain)}"
-            await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
         
         # 更新地点
         loc_info = self.get_config('loc_info')
@@ -458,6 +445,9 @@ class TRPGMode(ChatGPTMessageHandler):
             self.set_config('curr_loc',curr_loc_response)  
 
         self.set_config('loc_info',loc_info)
+
+
+        
 
         return True
     

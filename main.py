@@ -52,22 +52,6 @@ del load
 
 channel_hander_context = {}
 
-def format_request(text):
-    # 首先移除先导关键词
-    for prefix_str in prefix:
-        # 检查文本是否以prefix开头
-        if text.startswith(prefix_str):
-            text = text[len(prefix_str):]
-            bot.debug_log(f'[ChatGPT]移除先导词 {prefix_str}')
-            break
-        # 检查文本是否以prefix + "chat"开头
-        elif text.startswith(prefix_str + "chat"):
-            text = text[len(prefix_str + "chat"):]
-            bot.debug_log(f'[ChatGPT]移除先导词 {prefix_str + "chat"}')
-            break
-
-    return text
-
 async def check_talk(data: Message):
         
     enabled = bot.get_config('enable_in_this_channel',data.channel_id)
@@ -97,15 +81,8 @@ async def check_talk(data: Message):
     
     return True, -99999
 
-prefix = ['阿米娅', '阿米兔', '兔兔', '兔子', '小兔子', 'Amiya', 'amiya']
-
 @bot.on_message(verify=check_talk,check_prefix=False,allow_direct=True)
 async def _(data: Message):
-# @bot.message_before_handle
-# async def _(data: Message, factory_name: str, instance):
-    # bot.debug_log(f'[ChatGPT]factory_name{factory_name}')
-    #if factory_name is not None:
-    #    return True
 
     if not data.text:
         return
@@ -114,15 +91,7 @@ async def _(data: Message):
     
     mode = bot.get_config('mode',data.channel_id)
 
-    prefixed_call = False
-    if data.is_at == True:
-        prefixed_call = True
-    if data.text_original.startswith(tuple(prefix)):
-        prefixed_call = True
-
-    request_text = format_request(data.text_original)
-
-    if request_text.upper().startswith("CHATGPT请问"):
+    if data.text_original.upper().startswith("CHATGPT请问"):
         success, raw_answer = await delegate.ask_chatgpt_raw([{"role": "user", "content":data.text}])
         if success:
             return Chain(data).text(raw_answer)
@@ -138,7 +107,7 @@ async def _(data: Message):
             log.error(e)
             return
 
-        await context.on_message(data,prefixed_call)
+        await context.on_message(data)
     elif mode == "跑团模式" and data.channel_id is not None:
         try:
             context = channel_hander_context.get(data.channel_id)
@@ -149,21 +118,20 @@ async def _(data: Message):
             log.error(e)
             return
 
-        await context.on_message(data,prefixed_call)
+        await context.on_message(data)
     else:
         channel = data.channel_id
         if channel is None:
             channel = f'User:{data.user_id}'
-        if prefixed_call or data.channel_id is None:
-            try:
-                context = channel_hander_context.get(channel)
-                if context is None or not isinstance(context, AskAmiya):
-                    context = AskAmiya(bot,delegate,channel)
-                    channel_hander_context[channel] = context
-            except Exception as e:
-                log.error(e)
-                return
-
-            await context.on_message(data,request_text,prefixed_call)
+        try:
+            context = channel_hander_context.get(channel)
+            if context is None or not isinstance(context, AskAmiya):
+                context = AskAmiya(bot,delegate,channel)
+                channel_hander_context[channel] = context
+        except Exception as e:
+            log.error(e)
+            return
+        
+        await context.on_message(data)
 
     return

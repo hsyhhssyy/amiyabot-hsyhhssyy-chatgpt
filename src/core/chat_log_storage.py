@@ -108,7 +108,7 @@ class ChatLogStorage():
         
             recent_cluster = find_most_recent_cluster(clusters)
 
-            self.debug_log(f'60秒内平均聊天{self.average_message_in_60_sec}: Cluster数量:{len(clusters)} 最近Cluser长度:{len(recent_cluster)} 最小取样:{min_samples}')
+            # self.debug_log(f'60秒内平均聊天{self.average_message_in_60_sec}: Cluster数量:{len(clusters)} 最近Cluser长度:{len(recent_cluster)} 最小取样:{min_samples}')
 
             if recent_cluster and len(recent_cluster)>=self.average_message_in_60_sec:
                 # 计算列表长度的一半
@@ -124,7 +124,7 @@ class ChatLogStorage():
 
                 non_empty_topic_count = len(recent_cluster) - non_empty_topic_count
 
-                self.debug_log(f'尝试判断Topic是否出现/继续存在: if {non_empty_topic_count}(当前新增聊天) >= {half_length}(最近聊天聚类/2)  当前话题:{topic_content}')
+                # self.debug_log(f'尝试判断Topic是否出现/继续存在: if {non_empty_topic_count}(当前新增聊天) >= {half_length}(最近聊天聚类/2)  当前话题:{topic_content}')
 
                 if non_empty_topic_count >= half_length:
                     # 有一半以上元素没有被判断topic

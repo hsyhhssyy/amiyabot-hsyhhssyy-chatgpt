@@ -4,6 +4,7 @@ from amiyabot import Message,Chain
 
 from .core.ask_chat_gpt import ChatGPTDelegate
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance,ChatGPTMessageHandler
+from .core.message_context import format_request,prefix
 
 class AskAmiya(ChatGPTMessageHandler):
     def __init__(self, bot:ChatGPTPluginInstance,delegate:ChatGPTDelegate, channel_id) -> None:
@@ -78,17 +79,27 @@ class AskAmiya(ChatGPTMessageHandler):
             self.__set_context(actual_context_id,request_obj)
             return f"{response}".strip()
         
-    async def on_message(self, data: Message, request_text:str, force: bool = False):
-        context_id = f'{data.channel_id}-{data.user_id}'
-        if self.bot.get_quote_id(data) == 0:
-            self.clear_context(context_id)
-        
-        if self.get_handler_config("amiya_thinking",True) == True:
-            await data.send(Chain(data).text('阿米娅思考中'))
+    async def on_message(self, data: Message):
+        prefixed_call = False
+        if data.is_at == True:
+            prefixed_call = True
+        if data.text_original.startswith(tuple(prefix)):
+            prefixed_call = True
 
-        channel_id = data.channel_id
-        if channel_id is None:
-            channel_id = f"User:{data.user_id}"
+        if prefixed_call or data.channel_id is None:
+            
+            request_text = format_request(data.original_text)
 
-        amiya_answer = await self.ask_amiya(request_text,context_id,channel_id,True,True,True)
-        await data.send(Chain(data, reference=True).text(amiya_answer))
+            context_id = f'{data.channel_id}-{data.user_id}'
+            if self.bot.get_quote_id(data) == 0:
+                self.clear_context(context_id)
+            
+            if self.get_handler_config("amiya_thinking",True) == True:
+                await data.send(Chain(data).text('阿米娅思考中'))
+
+            channel_id = data.channel_id
+            if channel_id is None:
+                channel_id = f"User:{data.user_id}"
+
+            amiya_answer = await self.ask_amiya(request_text,context_id,channel_id,True,True,True)
+            await data.send(Chain(data, reference=True).text(amiya_answer))
