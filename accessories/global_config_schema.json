@@ -119,6 +119,27 @@
             "type": "string"
           }
         },
+        "character_info": {
+          "title":"人物情报",
+          "description":"人物情报",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "task_info": {
+          "title":"任务情报",
+          "description":"任务情报",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "story": {
+          "title":"故事情节",
+          "description":"故事情节",
+          "type": "string"
+        },
         "curr_loc":{
           "title":"当前地点",
           "description":"当前地点",

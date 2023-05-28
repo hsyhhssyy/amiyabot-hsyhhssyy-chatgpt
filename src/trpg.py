@@ -50,7 +50,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 return json_object
             except json.JSONDecodeError:
                 return {}
-        if conf == "item_info" or conf == "loc_info":
+        if conf == "item_info" or conf == "loc_info" or conf == "character_info" or conf == "task_info":
             map_obj = self.get_handler_config(conf)
             if map_obj is None:
                 return []
@@ -68,7 +68,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 return []
             else:
                 return value
-        if conf == "my_id" or conf == "kp_id" or conf == "curr_loc":
+        if conf == "my_id" or conf == "kp_id" or conf == "curr_loc" or conf == "story":
             return self.get_handler_config(conf)
 
     def set_config(self, conf: str, value):
@@ -82,13 +82,13 @@ class TRPGMode(ChatGPTMessageHandler):
                 self.set_handler_config(conf, json_str)
             except (TypeError, OverflowError):
                 raise ValueError("Unable to convert the configuration value to JSON")
-        if conf == "item_info" or conf == "loc_info":
+        if conf == "item_info" or conf == "loc_info" or conf == "character_info" or conf == "task_info":
             try:
                 json_string_array = [json.dumps(item, ensure_ascii=False) for item in value]
                 self.set_handler_config(conf, json_string_array)
             except (TypeError, OverflowError):
                 raise ValueError("Unable to convert the configuration value to JSON")
-        if conf == "my_id" or conf == "kp_id" or conf == "env_info" or conf == "curr_loc":
+        if conf == "my_id" or conf == "kp_id" or conf == "env_info" or conf == "curr_loc" or conf == "story":
             return self.set_handler_config(conf,value)
 
     async def on_message(self, data: Message):
@@ -113,7 +113,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 if talks is None or len(talks)==0:
                     continue
 
-                self.debug_log(f'talks:{talks}')
+                # self.debug_log(f'talks:{talks}')
 
                 response_sent = False
 
@@ -252,24 +252,32 @@ class TRPGMode(ChatGPTMessageHandler):
 
         _, doctor_talks, _ = self.pick_prompt(context_list)
 
-        prompt_shards["<<QUERY>>"] = doctor_talks
+        prompt_shards["<<CONVERSATION>>"] = doctor_talks
 
         curr_loc = self.get_config('curr_loc')
         if curr_loc is None:
-            curr_loc = ""
-
-        prompt_shards["<<CURRENTLOCATION>>"] = curr_loc
+            curr_loc = "未知地点"
+        prompt_shards["<<CURRENT_LOCATION>>"] = curr_loc
 
         loc_info = self.get_config('loc_info')
         prompt_shards["<<LOCATION>>"] = json.dumps(
             loc_info, ensure_ascii=False)
+            
+        prompt_shards["<<LOCATION_NAME>>"] = ",".join([item["名称"] for item in loc_info if "名称" in item])
 
         item_info = self.get_config('item_info')
         prompt_shards["<<INVENTORY>>"] = json.dumps(
             item_info, ensure_ascii=False)
 
+        prompt_shards["<<INVENTORY_ITEM_NAME>>"] = ",".join([item["名称"] for item in item_info if "名称" in item])
+        
+        inventory_quantity = [{"名称": item.get("名称"), "数量": item.get("数量"), "单位": item.get("单位")} for item in item_info if "名称" in item and "数量" in item and "单位" in item]
+        prompt_shards["<<INVENTORY_QUANTITY>>"] = json.dumps(inventory_quantity, ensure_ascii=False)
+
         env_info = self.get_config('env_info')
         prompt_shards["<<INFORMATION>>"] = "\n".join(env_info)
+
+        prompt_shards["<<TASK>>"] = ""
 
         return prompt_shards
 
@@ -298,8 +306,6 @@ class TRPGMode(ChatGPTMessageHandler):
             await self.instance.send_message(Chain().text(f'{reply}'), channel_id=self.channel_id)
             amiya_context = ChatGPTMessageContext(reply, '阿米娅')
             self.storage.recent_messages.append(amiya_context)
-
-        self.process_response_json(amiya_reply)
         
         # ------------------- 单独用Prompt处理信息 -----------------------
 
@@ -311,6 +317,7 @@ class TRPGMode(ChatGPTMessageHandler):
         
         json_object = json_objects[0]
 
+        # 更新世界观情报
         env_info = self.get_config('env_info')
         env_info_gain = json_object.get('env_info_gain', None)
         env_info.extend(env_info_gain)        
@@ -333,6 +340,102 @@ class TRPGMode(ChatGPTMessageHandler):
         
         if message != "":
             await self.instance.send_message(Chain().text(f'({message})'), channel_id=self.channel_id)
+
+        # 更新地点情报
+        loc_info = self.get_config('loc_info')
+        loc_info_gain = json_object.get("loc_info_gain")
+
+        if loc_info_gain is not None:
+            for gain in loc_info_gain:
+                name = gain["Name"]
+                info = gain["Info"]
+                
+                # Check if item already exists in loc_info
+                existing_item = next((item for item in loc_info if item["名称"] == name), None)
+
+                if not existing_item:
+                    # Add new item to loc_info
+                    existing_item = {
+                        "名称": name,
+                        "情报": []
+                    }
+                    loc_info.append(existing_item)
+
+                # Update item quantity
+                if info is not None:
+                    existing_item["情报"].extend(info)
+                    message = f"地点【{name}】新增情报:{','.join(info)}"
+                    await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
+        
+
+        # 更新当前地点情报
+
+        curr_loc = self.get_config('curr_loc')  
+        curr_loc_response = json_object.get("curr_loc")
+
+        if curr_loc_response is not None and curr_loc_response != "":
+            curr_loc_item = next((item for item in loc_info if item["名称"] == curr_loc_response), None)
+            if curr_loc_item is None:
+                existing_item = {
+                                    "名称": curr_loc_response,
+                                    "情报": []
+                                }
+                loc_info.append(existing_item)
+
+            if curr_loc != curr_loc_response:
+                message = f"当前地点变更为【{curr_loc_response}】"
+                await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
+                self.set_config('curr_loc',curr_loc_response)  
+
+        self.set_config('loc_info',loc_info)
+
+        # 更新物品
+        item_info = self.get_config('item_info')  
+        item_exchange = json_object.get("item_exchange")
+        itm_info_gain = json_object.get("itm_info_gain")
+
+        if item_exchange is not None:
+            message = ""
+            for exchange in item_exchange:
+                name = exchange["Name"]
+                amount = exchange["Amount"]
+                unit = exchange["Unit"]
+
+                # Check if item already exists in item_info
+                existing_item = next((item for item in item_info if item["名称"] == name), None)
+
+                if existing_item:
+                    # Update item quantity
+                    existing_item["数量"] += amount
+                    if existing_item["数量"] < 0:
+                        existing_item["数量"] = 0
+                else:
+                    # Add new item to item_info
+                    existing_item = {
+                        "名称": name,
+                        "数量": max(amount, 0),
+                        "单位": unit,
+                        "情报": []
+                    }
+                    item_info.append(existing_item)
+
+                message += f"物品【{name}】数量已调整为 {existing_item['数量']} {unit} "
+            if message != "":
+                await self.instance.send_message(Chain().text(f'({message})'),channel_id=self.channel_id)
+
+        # 更新物品信息
+
+        if itm_info_gain is not None:
+            message = ""
+            if name in itm_info_gain:
+                item_info_item = next((item for item in item_info if item["名称"] == name))
+                item_info_item["情报"].extend(itm_info_gain[name])                
+                message += f"物品【{name}】新增情报 {','.join(itm_info_gain[name])} "
+            if message != "":
+                await self.instance.send_message(Chain().text(f'({message})'),channel_id=self.channel_id)
+
+        
+        self.set_config('item_info',item_info)  
 
     async def process_response_json(self,json_obj):
         # {
@@ -361,90 +464,9 @@ class TRPGMode(ChatGPTMessageHandler):
         # }
 
         
-        # 更新物品
-        item_info = self.get_config('item_info')  
-        item_exchange = json_obj["item_exchange"]
-        itm_info_gain = json_obj["itm_info_gain"]
-
-        for exchange in item_exchange:
-            name = exchange["Name"]
-            amount = exchange["Amount"]
-            unit = exchange["Unit"]
-
-            # Check if item already exists in item_info
-            existing_item = next((item for item in item_info if item["名称"] == name), None)
-
-            if existing_item:
-                # Update item quantity
-                existing_item["数量"] += amount
-                if existing_item["数量"] < 0:
-                    existing_item["数量"] = 0
-            else:
-                # Add new item to item_info
-                existing_item = {
-                    "名称": name,
-                    "数量": max(amount, 0),
-                    "单位": unit,
-                    "情报": []
-                }
-                item_info.append(existing_item)
-
-            # Add information to item_info
-            info_gain_str = "无"
-            if name in itm_info_gain:
-                item_info_item = next((item for item in item_info if item["名称"] == name))
-                item_info_item["情报"].extend(itm_info_gain[name])
-                info_gain_str = ','.join(itm_info_gain[name])
-
-            message = f"物品【{name}】数量已调整为 {existing_item['数量']} {unit} 新增情报:{info_gain_str}"
-            await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
         
-        self.set_config('item_info',item_info)  
         
-        # 更新地点
-        loc_info = self.get_config('loc_info')
-        loc_info_gain = json_obj["loc_info_gain"]
-
-        for gain in loc_info_gain:
-            name = gain["Name"]
-            info = gain["Info"]
-            
-            # Check if item already exists in loc_info
-            existing_item = next((item for item in loc_info if item["名称"] == name), None)
-
-            if not existing_item:
-                # Add new item to loc_info
-                existing_item = {
-                    "名称": name,
-                    "情报": []
-                }
-                loc_info.append(existing_item)
-
-            # Update item quantity
-            if info is not None:
-                existing_item["情报"].extend(info)
-                message = f"地点【{name}】新增情报:{','.join(info)}"
-                await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
         
-
-        # 更新当前地点情报
-
-        curr_loc = self.get_config('curr_loc')  
-        curr_loc_response = json_obj["curr_loc"]
-        curr_loc_item = next((item for item in loc_info if item["名称"] == curr_loc_response), None)
-        if curr_loc_item is None:
-            existing_item = {
-                                "名称": curr_loc_response,
-                                "情报": []
-                            }
-            loc_info.append(existing_item)
-
-        if curr_loc != curr_loc_response:
-            message = f"当前地点变更为【{curr_loc_response}】"
-            await self.instance.send_message(Chain().text(f'{message}'),channel_id=self.channel_id)
-            self.set_config('curr_loc',curr_loc_response)  
-
-        self.set_config('loc_info',loc_info)
 
 
         
