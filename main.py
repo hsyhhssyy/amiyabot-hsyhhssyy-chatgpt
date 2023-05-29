@@ -19,7 +19,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.3.3',
+    version='3.3.4',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',

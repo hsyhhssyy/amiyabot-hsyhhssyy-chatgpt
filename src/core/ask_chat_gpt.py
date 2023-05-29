@@ -48,6 +48,9 @@ class ChatGPTDelegate:
         
         AmiyaBotHsyhhssyyChatgptTokenConsumeModel.create_table(safe=True)
 
+    Model3 = "gpt-3.5-turbo"
+    Model4 = "gpt-4"
+
     def get_config(self, configName, channel_id=None):
         conf = self.bot.get_config(configName, channel_id)
         return conf

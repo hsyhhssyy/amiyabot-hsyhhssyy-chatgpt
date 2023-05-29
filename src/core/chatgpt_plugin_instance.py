@@ -91,19 +91,19 @@ class ChatGPTMessageHandler():
 
         if configName in handler_conf.keys():
             if handler_conf[configName] != "" and handler_conf[configName] != []:
-                self.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
+                # self.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
                 return handler_conf[configName]
         
         handler_conf = self.bot.get_config(self.handler_conf_key)
 
         if configName in handler_conf.keys():
             if handler_conf[configName] != "" and handler_conf[configName] != []:
-                self.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
+                # self.debug_log(f'[GetConfig]{configName} : {handler_conf[configName]}')
                 return handler_conf[configName]
             else:
                 return default
         
-        self.debug_log(f'[GetConfig]{configName} : None')
+        # self.debug_log(f'[GetConfig]{configName} : None')
         return default
     
     def set_handler_config(self, configName, configValue, channel_id=None):
