@@ -125,13 +125,13 @@ class TRPGMode(ChatGPTMessageHandler):
                     kp_id = self.get_config("kp_id")
                     if f'{message_context.user_id}' == f'{kp_id}' and len(message_context.text) > 50:
                         # kp说了超过50个字的单段话
-                        await self.instance.send_message(Chain().text(f'阿米娅正在整理思绪...'), channel_id=self.channel_id)
+                        await self.send_message(f'阿米娅正在整理思绪...')
                         await self.response_to_pc()
                         await self.organize_inventory()
                         response_sent = True
                     elif message_context.is_prefix or message_context.is_quote:
                         # 直接呼叫了阿米娅，对其进行响应。
-                        await self.instance.send_message(Chain().text(f'阿米娅思考中...'), channel_id=self.channel_id)
+                        await self.send_message(f'阿米娅思考中...')
                         await self.response_to_pc()
                         await self.organize_inventory()
                         response_sent = True
@@ -145,7 +145,7 @@ class TRPGMode(ChatGPTMessageHandler):
                     _, doctor_talks, _ = self.pick_prompt(context_list, 4000)
                     if len(doctor_talks) > 1000:
                         # 积压的消息要超字数了，触发一次说话防止丢消息
-                        await self.instance.send_message(Chain().text(f'阿米娅好像想要说点什么...'), channel_id=self.channel_id)
+                        await self.send_message(f'阿米娅好像想要说点什么...')
                         await self.response_to_pc()
                         await self.organize_inventory()
                         response_sent = True
@@ -171,7 +171,7 @@ class TRPGMode(ChatGPTMessageHandler):
         kp_id = self.get_config("kp_id")
         my_id = self.get_config("my_id")
 
-        self.debug_log(f'kpid {kp_id} my_id {my_id} pc {pc_mapping}')
+        # self.debug_log(f'kpid {kp_id} my_id {my_id} pc {pc_mapping}')
 
         result = ""
         for i in range(1, len(context_list) + 1):
@@ -216,7 +216,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 mapping[qq] = pc_name  # 设置新的映射
                 self.set_config("pc_name_mapping", mapping)  # 更新配置
 
-                await self.instance.send_message(Chain().text(f'已将{qq}的团内名称设置为{match.group(1).strip()}'), channel_id=self.channel_id)
+                await self.send_message(f'已将{qq}的团内名称设置为{match.group(1).strip()}')
 
                 return True
 
@@ -228,7 +228,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
                 self.set_config("kp_id", qq)
 
-                await self.instance.send_message(Chain().text(f'已将{qq}设置为本团KP'), channel_id=self.channel_id)
+                await self.send_message(f'已将{qq}设置为本团KP')
 
                 return True
 
@@ -238,7 +238,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
             self.set_config("my_id", qq)
 
-            await self.instance.send_message(Chain().text(f'已将{qq}设置为代理用户'), channel_id=self.channel_id)
+            await self.send_message(f'已将{qq}设置为代理用户')
 
             return True
 
@@ -325,7 +325,7 @@ class TRPGMode(ChatGPTMessageHandler):
         replies = amiya_reply.get('replys', [])
 
         for reply in replies:
-            await self.instance.send_message(Chain().text(f'{reply}'), channel_id=self.channel_id)
+            await self.send_message(f'{reply}')
             amiya_context = ChatGPTMessageContext(reply, '阿米娅')
             self.storage.recent_messages.append(amiya_context)
 
@@ -356,12 +356,12 @@ class TRPGMode(ChatGPTMessageHandler):
         if len(env_info_gain) > 0:
             message = f"新增世界观情报: {','.join(env_info_gain)}"
 
-        if len(env_info_remove) > 0:
+        if env_info_remove is not None and len(env_info_remove) > 0:
             remove_message = f"移除世界观情报: {','.join(env_info_remove)}"
             message += f"\n{remove_message}"
 
         if message != "":
-            await self.instance.send_message(Chain().text(f'({message})'), channel_id=self.channel_id)
+            await self.send_message(f'{message}')
 
         # 更新地点情报
         loc_info = self.get_config('loc_info')
@@ -388,7 +388,8 @@ class TRPGMode(ChatGPTMessageHandler):
                 if info is not None:
                     existing_item["情报"].extend(info)
                     message = f"地点【{name}】新增情报:{','.join(info)}"
-                    await self.instance.send_message(Chain().text(f'{message}'), channel_id=self.channel_id)
+                    await self.send_message(f'{message}')
+                    
 
         # 更新当前地点情报
 
@@ -407,7 +408,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
             if curr_loc != curr_loc_response:
                 message = f"当前地点变更为【{curr_loc_response}】"
-                await self.instance.send_message(Chain().text(f'{message}'), channel_id=self.channel_id)
+                await self.send_message(f'{message}')
                 self.set_config('curr_loc', curr_loc_response)
 
         self.set_config('loc_info', loc_info)
@@ -445,7 +446,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
                 message += f"物品【{name}】数量已调整为 {existing_item['数量']} {unit} "
             if message != "":
-                await self.instance.send_message(Chain().text(f'({message})'), channel_id=self.channel_id)
+                await self.send_message(f'{message}')
 
         # 更新物品信息
 
@@ -467,7 +468,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 item_info_item["情报"].extend(itm_info_gain[name])
                 message += f"物品【{name}】新增情报 {','.join(itm_info_gain[name])} "
             if message != "":
-                await self.instance.send_message(Chain().text(f'({message})'), channel_id=self.channel_id)
+                await self.send_message(f'{message}')
 
         self.set_config('item_info', item_info)
 
@@ -494,7 +495,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 if info is not None:
                     existing_item["情报"].extend(info)
                     message = f"人物【{name}】新增情报:{','.join(info)}"
-                    await self.instance.send_message(Chain().text(f'{message}'), channel_id=self.channel_id)
+                    await self.send_message(f'{message}')
 
         self.set_config('character_info', chara_info)
 
@@ -523,11 +524,9 @@ class TRPGMode(ChatGPTMessageHandler):
 
                 message += f"任务【{content}】的状态变为 {status} "
             if message != "":
-                await self.instance.send_message(Chain().text(f'({message})'), channel_id=self.channel_id)
+                await self.send_message(f'{message}')
 
         self.set_config('task_info', task_info)
-
- 
 
     async def organize_inventory(self):
         
@@ -547,3 +546,11 @@ class TRPGMode(ChatGPTMessageHandler):
 
                     if isinstance(json_obj, list) and all(isinstance(item, str) for item in json_obj):                        
                         self.set_config('env_info', json_obj)        
+
+
+    async def send_message(self,str):
+        
+        my_id = self.get_config("my_id")
+
+        # await self.instance.send_message(Chain().text(f'{str}'), user_id=my_id)
+        await self.instance.send_message(Chain().text(f'({str})'), channel_id=self.channel_id)

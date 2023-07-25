@@ -79,6 +79,9 @@ class AskAmiya(ChatGPTMessageHandler):
             self.__set_context(actual_context_id,request_obj)
             return f"{response}".strip()
         
+        
+        return "很抱歉博士，但是我现在暂时无法回答您的问题。"
+        
     async def on_message(self, data: Message):
         prefixed_call = False
         if data.is_at == True:
@@ -88,7 +91,7 @@ class AskAmiya(ChatGPTMessageHandler):
 
         if prefixed_call or data.channel_id is None:
             
-            request_text = format_request(data.original_text)
+            request_text = format_request(data.text_original)
 
             context_id = f'{data.channel_id}-{data.user_id}'
             if self.bot.get_quote_id(data) == 0:
@@ -103,3 +106,5 @@ class AskAmiya(ChatGPTMessageHandler):
 
             amiya_answer = await self.ask_amiya(request_text,context_id,channel_id,True,True,True)
             await data.send(Chain(data, reference=True).text(amiya_answer))
+        
+        return

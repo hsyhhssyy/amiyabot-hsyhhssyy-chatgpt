@@ -17,6 +17,12 @@ from ..util.string_operation import extract_json
 
 curr_dir = os.path.dirname(__file__)
 
+
+dir_path = f"{curr_dir}/../../../../resource/chatgpt"
+dir_path = os.path.abspath(dir_path)
+if not os.path.exists(dir_path):
+    os.makedirs(dir_path)
+
 fields = {
     'id':  AutoField(),
     'exec_id': CharField(),
@@ -100,7 +106,7 @@ class ChatGPTDelegate:
 
          # 出于调试目的，写入请求数据
         formatted_file_timestamp = time.strftime('%Y%m%d', time.localtime(time.time()))
-        sent_file = f'{curr_dir}/../../../../resource/chatgpt/{channel_id}.{formatted_file_timestamp}.txt'
+        sent_file = f'{dir_path}/{channel_id}.{formatted_file_timestamp}.txt'
         with open(sent_file, 'a', encoding='utf-8') as file:
             file.write('-'*20)
             formatted_timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))

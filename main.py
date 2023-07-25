@@ -1,5 +1,6 @@
 import os
 import asyncio
+import traceback
 
 from typing import Optional, Union
 
@@ -12,6 +13,7 @@ from .src.core.ask_chat_gpt import ChatGPTDelegate
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.deep_cosplay import DeepCosplay
 from .src.trpg import TRPGMode
+from .src.online_troll import OnlineTrollMode
 from .src.ask_amiya import AskAmiya
 from .src.util.complex_math import frequency_controller
 
@@ -19,7 +21,7 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.3.4',
+    version='3.4.4',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -55,7 +57,7 @@ channel_hander_context = {}
 async def check_talk(data: Message):
         
     enabled = bot.get_config('enable_in_this_channel',data.channel_id)
-    bot.debug_log(f'[{data.channel_id:<10}]enable_in_this_channel: {enabled}')
+    bot.debug_log(f'[{data.channel_id:<10}]在本频道启用: {enabled}')
     if enabled != True:
         return False, 0
 
@@ -84,12 +86,18 @@ async def check_talk(data: Message):
 @bot.on_message(verify=check_talk,check_prefix=False,allow_direct=True)
 async def _(data: Message):
 
+    # bot.debug_log(f"触发进入ChatGPT插件 {not data.text}")
+
     if not data.text:
         return
-
-    bot.debug_log(f'[{data.channel_id:<10}]on_message{data.text_original}')
     
-    mode = bot.get_config('mode',data.channel_id)
+    try:
+        mode = bot.get_config('mode',data.channel_id)
+    except Exception as e:
+            bot.debug_log(
+                f'Unknown Error {e} \n {traceback.format_exc()}')
+
+    bot.debug_log(f'[{data.channel_id:<10}] 模式:{mode} 消息:{data.text_original}')
 
     if data.text_original.upper().startswith("CHATGPT请问"):
         success, raw_answer = await delegate.ask_chatgpt_raw([{"role": "user", "content":data.text}])
@@ -102,6 +110,17 @@ async def _(data: Message):
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, DeepCosplay):
                 context = DeepCosplay(bot,delegate,data.channel_id,data.instance)
+                channel_hander_context[data.channel_id] = context
+        except Exception as e:
+            log.error(e)
+            return
+
+        await context.on_message(data)
+    elif mode == "典孝急模式" and data.channel_id is not None:
+        try:
+            context = channel_hander_context.get(data.channel_id)
+            if context is None or not isinstance(context, OnlineTrollMode):
+                context = OnlineTrollMode(bot,delegate,data.channel_id,data.instance)
                 channel_hander_context[data.channel_id] = context
         except Exception as e:
             log.error(e)

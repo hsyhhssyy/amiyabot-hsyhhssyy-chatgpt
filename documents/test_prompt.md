@@ -111,6 +111,8 @@
 ]
 请用json返回结果，为一个数组,其中每一项包含一个function,probablity表示置信度,params中含有解析出的参数的值.
 
+
+
 下面用大括号包含的这几句话，在讨论同一个话题的概率很高吗？
 {
 九命猫博士:高中的时候，有老师说，欧美那种发展，难以为继
@@ -468,3 +470,17 @@ P11庇护所可能是一个安全的临时落脚点
 Your response should be in JSON format and include the following attributes:
 The attribute "env_info_gain" is a string array that represents important information about the worldview of this world that can be obtained from the content in the interaction section. Please refer to the information section and avoid duplicating existing information. Each information should not exceed 100 characters.
 The attribute "env_info_remove" is a string array that lists the erroneous information that needs to be removed if there is a conflict between existing information and the information obtained from the interaction section. Please add new information to "env_info_gain".
+
+[
+   这不仅仅关乎“地”这个范畴，更有深层次的含义，如罗德岛的使命、干员们的决心以及感染者们的愿望等等。这是我们要保护的，也是我们要克服的挑战。
+]
+请问上面这句话，符合下面的哪一个条目？
+当对方陈述观点时，无论观点对错，说“典”。
+当对方支持自己不支持的人或事时，说“孝”。
+当对方辩论，或是开始细致解说时，说“急”。
+当自己难以理解对方表达的观点时，说“乐”。
+当对方要求你表达不存在的观点时，说“蚌”。
+当对方产生足以称为立场的观点时，说“批”。
+当自己说出自认为一针见血的话时，说“赢”。
+当无法对对方言论进行有效反驳时，说“麻”。
+请用Json输出你的回答，其中OptionText是要说的那个字。

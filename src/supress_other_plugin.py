@@ -20,9 +20,9 @@ class OtherPluginSuppressor:
             log.info(message)
 
     async def multi_keyword_verify(self,data: Message, keywords:list, level):
-        self.debug_log(f"Suppressed multi_keyword_verify Handler Call keywords = {keywords}")
+        # self.debug_log(f"Suppressed multi_keyword_verify Handler Call keywords = {keywords}")
         if all(substring in data.text for substring in keywords):
-            self.debug_log(f"命中新的Handler level = {level}")
+            self.debug_log(f"命中该 multi_keyword_verify Handler level = {level}")
             return True, level
         return False, 0
 
@@ -35,9 +35,9 @@ class OtherPluginSuppressor:
     async def regexp_verify(self,data: Message, reg, level):
         if level is None:
             level = 0
-        self.debug_log(f"Suppressed regexp_verify Handler Call reg = {reg}")
+        # self.debug_log(f"Suppressed regexp_verify Handler Call reg = {reg}")
         if re.match(reg, data.text) is not None:
-            self.debug_log(f"命中新的Handler level = {level}")
+            self.debug_log(f"命中该 regexp_verify Handler level = {level}")
             return True, level
         return False, 0
 
@@ -50,7 +50,7 @@ class OtherPluginSuppressor:
 
     async def keyword_before_func_verify(self, data: Message, keywords:list, func):
         
-        self.debug_log(f"Suppressed keyword_before_func_verify Handler Call keywords = {keywords}")
+        # self.debug_log(f"Suppressed keyword_before_func_verify Handler Call keywords = {keywords}")
 
         if any(substring in data.text for substring in keywords):
             self.debug_log(f"命中该Handler for:{data.text}，调用后续代码")
@@ -70,7 +70,7 @@ class OtherPluginSuppressor:
 
     async def reg_before_func_verify(self, data: Message, reg, func):
         
-        self.debug_log(f"Suppressed reg_before_func_verify Handler Call Reg = {reg}")
+        # self.debug_log(f"Suppressed reg_before_func_verify Handler Call Reg = {reg}")
         
         if re.match(reg, data.text) is not None:
             self.debug_log(f"命中该Handler for:{data.text}，调用后续代码")

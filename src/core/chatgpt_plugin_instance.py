@@ -136,7 +136,7 @@ class ChatGPTMessageHandler():
 
         model = self.bot.get_config("model",self.channel_id)
 
-        if model == 'gpt-3.5 turbo':
+        if model == 'gpt-3.5-turbo':
             return model
 
         global quota

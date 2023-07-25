@@ -259,8 +259,11 @@ class DeepCosplay(ChatGPTMessageHandler):
                 average_length = total_length / len(filtered_context_list)
                 word_limit_count = int(random.gauss(average_length*2, average_length))
         
-        if word_limit_count<20:
-            word_limit_count = 20
+        if word_limit_count<10:
+            word_limit_count = 10
+
+        if word_limit_count > 50:
+            word_limit_count = 50
 
         command = command.replace("<<WORD_COUNT>>", f'{word_limit_count}')
 
@@ -270,8 +273,10 @@ class DeepCosplay(ChatGPTMessageHandler):
         operator_detail = ""
 
         for name,operator in ArknightsGameData.operators.items():
-            if name in doctor_talks:
-                operator_detail += '\n' + self.merge_operator_detail(operator)
+            if len(name) > 1:
+                # 不拼入单字干员，免得经常突然提及，尤其是年，阿，令
+                if name in doctor_talks:
+                    operator_detail += '\n' + self.merge_operator_detail(operator)
 
         command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_detail}')
 

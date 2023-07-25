@@ -2,19 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "api_key": {
+      "title":"API Key",
+      "description":"由OpenAI提供给您的ApiKey，没有的话请到https://platform.openai.com/account/api-keys申请。",
+      "type": "string"
+    },
     "enable_in_this_channel": {
-      "title":"在本频道开启",
-      "description":"加入一个功能的总开关，并且默认是关闭的。这样同时参与多个群的兔兔也不会疯狂消费ChatGPT了",
+      "title":"默认开启",
+      "description":"关闭此开关时，未提供频道级配置的频道默认不开启本功能，反之则开启",
       "type": "boolean"
-    },    
+    },   
     "mode": {
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
       "type": "string",
-      "enum": ["经典模式", "角色扮演","跑团模式","典孝急模式"]
+      "enum": ["经典模式", "角色扮演"]
     },
     "normal_mode_config": {
-      "title":"常规配置",
+      "title":"经典模式",
       "type": "object",
       "properties": {
         "predef_context": {
@@ -39,14 +44,14 @@
           "type": "boolean"
         }
       }
-    }, 
+    },
     "deep_cosplay_mode_config": {
       "type": "object",
       "title":"角色扮演",
       "properties": {
         "interest_initial": {
           "title":"初始兴趣",
-          "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔活跃的时长。",
+          "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔让他不要一直接茬。",
           "type": "number"
         },
         "output_mental": {
@@ -71,6 +76,21 @@
         }
       }
     },
+    "override_other_plugin": {
+      "title":"覆盖其他插件",
+      "description":"开启后将覆盖特定的几个插件的关键词从而保证ChatGPT顺利触发。",
+      "type": "boolean"
+    },
+    "base_url": {
+      "title":"反向代理Url",
+      "description":"可以填写一个Url作为API的基础路径。该url应该以http开头，结尾不包含斜杠，使用时将会拼接为{base_url}/completion",
+      "type": "string"
+    },
+    "proxy": {
+      "title":"http代理",
+      "description":"可选的一个http或https代理，socks代理不支持",
+      "type": "string"
+    },
     "model": {
       "title":"GPT模型",
       "description":"选择要使用的gpt模型(注意钱包)",
@@ -81,9 +101,20 @@
       "title":"黑名单",
       "description":"这些人的话，兔兔会直接忽略，不记录也不响应。",
       "type": "array"
+    },
+    "gpt_4_quota": {
+      "title":"GPT4限额",
+      "description":"使用gpt-4模型时生效，限制GPT4的平均每小时调用次数",
+      "type": "integer"
+    },
+    "show_log": {
+      "title":"调试日志",
+      "description":"开启后将写入用于调试的大量日志。",
+      "type": "boolean"
     }
   },
   "required": [
+    "api_key",
     "model"
   ]
 }
