@@ -63,7 +63,9 @@ class AskAmiya(ChatGPTMessageHandler):
 
         self.bot.debug_log(f'{request_obj}')
 
-        success,response = await self.delegate.ask_chatgpt_raw(request_obj,channel_id)
+        model = self.get_model_with_quota()
+
+        success,response = await self.delegate.ask_chatgpt_raw(request_obj,channel_id,model)
         
         self.user_lock.remove(f'AskAmiya-{context_id}')
         

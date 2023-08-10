@@ -74,7 +74,7 @@ class ChatGPTMessageContext:
             context = context_list[-i]
             if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID:
                 if distinguish_doc:
-                    text_to_append = f'{context.nickname}博士:{context.text}'
+                    text_to_append = f'[{context.nickname}博士]:{context.text}'
                 else:
                     text_to_append = f'博士:{context.text}'
             else:

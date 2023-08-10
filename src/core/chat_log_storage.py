@@ -208,7 +208,7 @@ class ChatLogStorage():
 
         topic_content = most_common_topic[0][0] if most_common_topic else None
 
-        _, request_text,_ = ChatGPTMessageContext.pick_prompt(context_list,1000,True)
+        _, request_text,_ = ChatGPTMessageContext.pick_prompt(context_list,1000,False)
 
         if topic_content == ChatLogStorage.NoTopic:
             topic_content = None

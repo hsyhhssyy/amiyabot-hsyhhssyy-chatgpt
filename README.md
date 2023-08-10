@@ -276,3 +276,5 @@ SELECT
 | 3.3.1  | 修复了CQHttp的Quote ID的问题。 |
 | 3.4.0  | 修复了角色扮演模式会错误调用GPT-4 API的bug，新增了一个娱乐模式"典孝急模式"。 |
 | 3.4.3  | 本版本以及前面两个版本，修复了报告"No such file or directory"错误的问题。修复了遇到网络问题时会报错"expected string or byte-like object"而不是返回可读信息的问题。 |
+| 3.3.4  | 修复了经典模式下Quota不生效的问题。 |
+| 3.3.5  | 修复了3.5API下错误的输出QQ昵称的问题(因为3.5太蠢,因此不带入QQ昵称防止AI弄错)。 |

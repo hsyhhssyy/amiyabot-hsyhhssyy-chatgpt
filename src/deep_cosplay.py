@@ -183,39 +183,6 @@ class DeepCosplay(ChatGPTMessageHandler):
         
         return detail_text
 
-    def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=1000,distinguish_doc:bool= False) -> Tuple[list, str, list]:
-
-        request_obj = []
-        
-        picked_context = []
-
-        result = ""
-        for i in range(1, len(context_list) + 1):
-            context = context_list[-i]
-            if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID:
-                if distinguish_doc:
-                    text_to_append = f'{context.nickname}博士:{context.text}'
-                else:
-                    text_to_append = f'博士:{context.text}'
-            else:
-                if context.text != DeepCosplay.ERROR_REPLY:
-                    text_to_append = f'阿米娅:{context.text}'
-                else:
-                    text_to_append = ""
-            if len(result) + len(text_to_append) + 1 <= max_chars:
-                # 如果拼接后的长度还没有超过max_chars个字符，就继续拼接
-                result = text_to_append + "\n" + result
-                if context.user_id != 0:
-                    request_obj.append({"role": "user", "content": context.text})
-                else:
-                    request_obj.append({"role": "assistant", "content": context.text})
-                picked_context.append(context)
-            else:
-                break
-        request_obj.reverse()
-        picked_context.reverse()
-        return request_obj, result, picked_context
-
     # 根据一大堆话生成一个回复
     async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool,model:str) -> bool:
         max_prompt_chars = 1000
@@ -228,15 +195,13 @@ class DeepCosplay(ChatGPTMessageHandler):
         if  model == "gpt-4":
             max_chatgpt_chars = 8000
             distinguish_doc = True
-        else:
-            return False
 
-        _,doctor_talks,_ = self.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
+        _,doctor_talks,_ = ChatGPTMessageContext.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
 
-        if(model == "gpt-4"):
-            template_filename = "amiya-template-v3.txt"
-        else:
-            template_filename = "amiya-template-v2.txt"
+        # if(model == "gpt-4"):
+        template_filename = "deep-cosplay/amiya-template-v4.txt"
+        # else:
+        #     template_filename = "amiya-template-v2.txt"
 
         self.debug_log(f'template select: {model} {template_filename}')
 
@@ -287,7 +252,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         # 二者拼一起作为Memory
         memory = list(set(memory_in_time).union(set(memory_in_count)))
 
-        _,memory_str,_ = self.pick_prompt(memory,max_prompt_chars,distinguish_doc)
+        _,memory_str,_ = ChatGPTMessageContext.pick_prompt(memory,max_prompt_chars,distinguish_doc)
 
         command = command.replace("<<MEMORY>>", memory_str)
 

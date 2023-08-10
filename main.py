@@ -21,15 +21,15 @@ curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.4.4',
+    version='3.4.5',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
     document=f'{curr_dir}/README.md',
     channel_config_default=f'{curr_dir}/accessories/channel_config_default.json',
-    channel_config_schema=f'{curr_dir}/accessories/channel_config_schema.json', 
+    channel_config_schema=f'{curr_dir}/accessories/channel_config_schema.v3.3.1.json', 
     global_config_default=f'{curr_dir}/accessories/global_config_default.json',
-    global_config_schema=f'{curr_dir}/accessories/global_config_schema.json', 
+    global_config_schema=f'{curr_dir}/accessories/global_config_schema.v3.3.1.json', 
 )
 
 delegate = ChatGPTDelegate()
