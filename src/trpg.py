@@ -69,7 +69,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 return []
             else:
                 return value
-        if conf == "my_id" or conf == "kp_id" or conf == "curr_loc" or conf == "story":
+        if conf == "my_id" or conf == "kp_id" or conf == "curr_loc" or conf == "story" or conf == "output_debug":
             return self.get_handler_config(conf)
 
     def set_config(self, conf: str, value):
@@ -299,6 +299,9 @@ class TRPGMode(ChatGPTMessageHandler):
             chara_info, ensure_ascii=False)
         prompt_shards["<<CHARACTER_NAME>>"] = ",".join(
             [item["名称"] for item in chara_info if "名称" in item])
+        
+        story = self.get_config('story')
+        prompt_shards["<<STORY>>"] = story
 
         return prompt_shards
 
@@ -333,7 +336,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
         command = await self.format_template("trpg-templates/amiya-template-trpg-process-info.txt", prompt_shards)
 
-        success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, ChatGPTDelegate.Model3)
+        success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, self.get_model_with_quota())
         if not success or len(json_objects) < 1:
             return
 
@@ -360,7 +363,7 @@ class TRPGMode(ChatGPTMessageHandler):
             remove_message = f"移除世界观情报: {','.join(env_info_remove)}"
             message += f"\n{remove_message}"
 
-        if message != "":
+        if message != "" and self.get_config('output_debug')==True:
             await self.send_message(f'{message}')
 
         # 更新地点情报
@@ -388,7 +391,8 @@ class TRPGMode(ChatGPTMessageHandler):
                 if info is not None:
                     existing_item["情报"].extend(info)
                     message = f"地点【{name}】新增情报:{','.join(info)}"
-                    await self.send_message(f'{message}')
+                    if self.get_config('output_debug')==True:
+                        await self.send_message(f'{message}')
                     
 
         # 更新当前地点情报
@@ -408,8 +412,9 @@ class TRPGMode(ChatGPTMessageHandler):
 
             if curr_loc != curr_loc_response:
                 message = f"当前地点变更为【{curr_loc_response}】"
-                await self.send_message(f'{message}')
-                self.set_config('curr_loc', curr_loc_response)
+                if self.get_config('output_debug')==True:
+                    await self.send_message(f'{message}')
+                    self.set_config('curr_loc', curr_loc_response)
 
         self.set_config('loc_info', loc_info)
 
@@ -445,7 +450,7 @@ class TRPGMode(ChatGPTMessageHandler):
                     item_info.append(existing_item)
 
                 message += f"物品【{name}】数量已调整为 {existing_item['数量']} {unit} "
-            if message != "":
+            if message != "" and self.get_config('output_debug')==True:
                 await self.send_message(f'{message}')
 
         # 更新物品信息
@@ -467,7 +472,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
                 item_info_item["情报"].extend(itm_info_gain[name])
                 message += f"物品【{name}】新增情报 {','.join(itm_info_gain[name])} "
-            if message != "":
+            if message != "" and self.get_config('output_debug')==True:
                 await self.send_message(f'{message}')
 
         self.set_config('item_info', item_info)
@@ -495,7 +500,8 @@ class TRPGMode(ChatGPTMessageHandler):
                 if info is not None:
                     existing_item["情报"].extend(info)
                     message = f"人物【{name}】新增情报:{','.join(info)}"
-                    await self.send_message(f'{message}')
+                    if self.get_config('output_debug')==True:
+                        await self.send_message(f'{message}')
 
         self.set_config('character_info', chara_info)
 
@@ -523,10 +529,17 @@ class TRPGMode(ChatGPTMessageHandler):
                     task_info.append(existing_item)
 
                 message += f"任务【{content}】的状态变为 {status} "
-            if message != "":
+            if message != "" and self.get_config('output_debug')==True:
                 await self.send_message(f'{message}')
 
         self.set_config('task_info', task_info)
+
+        story_info = self.get_config('story')
+
+        if story_info is not None:
+            self.set_config('story', story_info)
+            if self.get_config('output_debug')==True:
+                await self.send_message(f'当前故事：{story_info}')
 
     async def organize_inventory(self):
         
@@ -538,7 +551,7 @@ class TRPGMode(ChatGPTMessageHandler):
         if len(env_info) > 30:
             prompt_shards["INFORMATION_COUNT"] = "20"
             command = await self.format_template("trpg-templates/amiya-template-trpg-organize-information-v0.txt", prompt_shards)
-            success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, "gpt-3.5-turbo")
+            success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, self.get_model_with_quota())
 
             if success:
                 if json_objects is not None and len(json_objects) > 1:

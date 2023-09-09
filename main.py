@@ -27,9 +27,9 @@ bot = ChatGPTPluginInstance(
     description='调用 OpenAI ChatGPT 智能回复普通对话',
     document=f'{curr_dir}/README.md',
     channel_config_default=f'{curr_dir}/accessories/channel_config_default.json',
-    channel_config_schema=f'{curr_dir}/accessories/channel_config_schema.v3.3.1.json', 
+    channel_config_schema=f'{curr_dir}/accessories/channel_config_schema.json', 
     global_config_default=f'{curr_dir}/accessories/global_config_default.json',
-    global_config_schema=f'{curr_dir}/accessories/global_config_schema.v3.3.1.json', 
+    global_config_schema=f'{curr_dir}/accessories/global_config_schema.json', 
 )
 
 delegate = ChatGPTDelegate()

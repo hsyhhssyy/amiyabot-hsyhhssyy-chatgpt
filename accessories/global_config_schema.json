@@ -144,6 +144,11 @@
           "title":"当前地点",
           "description":"当前地点",
           "type": "string"
+        },
+        "output_debug": {
+          "title":"输出调试信息",
+          "description":"是否输出调试用的信息",
+          "type": "boolean"
         }
       }
     },
