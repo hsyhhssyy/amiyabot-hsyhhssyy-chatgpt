@@ -91,12 +91,15 @@ class ChatGPTDelegate:
             
         except openai.error.RateLimitError as e:
             self.bot.debug_log(f"RateLimitError: {e}")
+            self.bot.debug_log(f'Chatgpt Raw: \n{combined_message}')
             return False, "RateLimitError"
         except openai.error.InvalidRequestError as e:
             self.bot.debug_log(f"InvalidRequestError: {e}")
+            self.bot.debug_log(f'Chatgpt Raw: \n{combined_message}')
             return False, "InvalidRequestError"
         except Exception as e:
             self.bot.debug_log(f"Exception: {e}")
+            self.bot.debug_log(f'Chatgpt Raw: \n{combined_message}')
             return False, "UnknownError"
 
         text: str = response['choices'][0]['message']['content']

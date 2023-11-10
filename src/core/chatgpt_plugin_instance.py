@@ -7,7 +7,7 @@ from amiyabot.log import LoggerManager
 
 from core import log
 from core.util import read_yaml
-from core.customPluginInstance import AmiyaBotPluginInstance
+from core import AmiyaBotPluginInstance
 from .message_context import get_quote_id
 
 from .ask_chat_gpt import ChatGPTDelegate

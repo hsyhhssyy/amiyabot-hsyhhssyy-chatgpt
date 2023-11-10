@@ -23,6 +23,8 @@
 
 我认为目前兔兔的角色扮演模式，已经可以完全取代经典模式（前提是你的钱包够），如果需要问专业问题，可以使用下面的`ChatGPT请问`关键词。
 
+为供其他插件调用的函数ask_amiya增加model参数来覆盖model设置
+
 # 经典模式
 
 在唤起兔兔但不能触发其他任何功能时，将会进入此功能。可以使用 `兔兔chat` 开始一句问题来强制触发。
@@ -159,7 +161,8 @@ async def ask_amiya(
     context_id: Optional[str] = None,
     use_friendly_error: bool = True,
     use_conext_prefix: bool = True,
-    use_stop_words: bool = True
+    use_stop_words: bool = True,
+	model : str = None
     ) -> Optional[str]:
     ...
 ```
@@ -173,6 +176,8 @@ use_friendly_error指示当出错时是返回null还是返回一句以阿米娅�
 use_conext_prefix指示是否使用全局配置文件里的context_prefix，不使用时，该函数效果和原始ChatGPT一致。
 
 use_stop_words指示是否使用全局配置文件里的stop_words来检测并拦截回答中对AI的自称，不使用时，该函数效果和原始ChatGPT一致，使用时，如果触发了StopWords，则函数会返回一句友好的错误信息或者None，取决于use_friendly_error。
+
+model可以强制指定使用的模型'gpt-3.5-turbo'或者'gpt-4'，如果传入None则依照ChatGPT插件的设置进行。
 
 ## 兔兔配额
 
@@ -276,5 +281,6 @@ SELECT
 | 3.3.1  | 修复了CQHttp的Quote ID的问题。 |
 | 3.4.0  | 修复了角色扮演模式会错误调用GPT-4 API的bug，新增了一个娱乐模式"典孝急模式"。 |
 | 3.4.3  | 本版本以及前面两个版本，修复了报告"No such file or directory"错误的问题。修复了遇到网络问题时会报错"expected string or byte-like object"而不是返回可读信息的问题。 |
-| 3.3.4  | 修复了经典模式下Quota不生效的问题。 |
-| 3.3.5  | 修复了3.5API下错误的输出QQ昵称的问题(因为3.5太蠢,因此不带入QQ昵称防止AI弄错)。 |
+| 3.4.4  | 修复了经典模式下Quota不生效的问题。 |
+| 3.4.5  | 修复了3.5API下错误的输出QQ昵称的问题(因为3.5太蠢,因此不带入QQ昵称防止AI弄错)。 |
+| 3.4.6  | 为ask_amiya函数加入model参数，让其他插件调用的时候可以复写model，适配新版兔兔 |

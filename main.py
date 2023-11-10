@@ -9,19 +9,25 @@ from amiyabot import Message,Chain
 from core import log
 
 from .src.supress_other_plugin import suppress_other_plugin
+
 from .src.core.ask_chat_gpt import ChatGPTDelegate
+from .src.core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
+
 from .src.deep_cosplay import DeepCosplay
 from .src.trpg import TRPGMode
 from .src.online_troll import OnlineTrollMode
 from .src.ask_amiya import AskAmiya
+
+from .src.server.trpg_server import TRPGAPI # 导入Server类从而启动服务器
+
 from .src.util.complex_math import frequency_controller
 
 curr_dir = os.path.dirname(__file__)
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.4.5',
+    version='3.4.6',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -37,15 +43,20 @@ delegate.bot = bot
 
 
 def load():
+
+    
+    AmiyaBotChatGPTTRPGParamHistory.create_table(safe=True)
+    AmiyaBotChatGPTTRPGSpeechLog.create_table(safe=True)
+
     bot.debug_log(f"ChatGPT Plugin Change Other Handler1：{bot.get_config('override_other_plugin')}")
     loop = asyncio.get_event_loop()
     loop.create_task(suppress_other_plugin(bot))
 
 async def ask_amiya(prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
-                     use_conext_prefix : bool = True, use_stop_words : bool = True) -> Optional[str] :
+                     use_conext_prefix : bool = True, use_stop_words : bool = True, model : str = None) -> Optional[str] :
     temp_amiya = AskAmiya(bot,delegate,None)
-    return await temp_amiya.ask_amiya(prompt,context_id,None,use_friendly_error,use_conext_prefix,use_stop_words)
-    
+    return await temp_amiya.ask_amiya(prompt,context_id,None,use_friendly_error,use_conext_prefix,use_stop_words, model)
+
 bot.ask_amiya = ask_amiya
 bot.load = load
 

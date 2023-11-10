@@ -31,13 +31,16 @@ class AskAmiya(ChatGPTMessageHandler):
             self.context_holder.pop(actual_context_id)
 
     async def ask_amiya(self, prompt : Union[str, list],context_id : Optional[str] = None, channel_id :str = None, use_friendly_error:bool = True,
-                     use_conext_prefix : bool = True, use_stop_words : bool = True) -> str :
+                     use_conext_prefix : bool = True, use_stop_words : bool = True, model : str = None) -> str :
         self.bot.debug_log(f'{prompt} {context_id} {use_friendly_error} {use_conext_prefix} {use_stop_words}')
 
         actual_context_id = f'AskAmiya-{context_id}'
         
         if actual_context_id in self.user_lock:
-            return "博士，我还在想上一个问题...>.<"
+            if use_friendly_error:
+                return "博士，我还在想上一个问题...>.<"
+            else:
+                return None
         self.user_lock.append(actual_context_id)
         
         request_obj = []
@@ -63,7 +66,8 @@ class AskAmiya(ChatGPTMessageHandler):
 
         self.bot.debug_log(f'{request_obj}')
 
-        model = self.get_model_with_quota()
+        if not model:
+            model = self.get_model_with_quota()
 
         success,response = await self.delegate.ask_chatgpt_raw(request_obj,channel_id,model)
         
@@ -75,14 +79,19 @@ class AskAmiya(ChatGPTMessageHandler):
                 if stop_words:
                     for sw in self.get_handler_config('stop_words'):
                         if sw in response :
-                            return "很抱歉博士，但是我不能回答您的这个问题。是否可以请博士换一个问题呢？"
+                            if use_friendly_error:
+                                return "很抱歉博士，但是我不能回答您的这个问题。是否可以请博士换一个问题呢？"
+                            else:
+                                return None
 
             request_obj.append({"role":'assistant',"content":response})
             self.__set_context(actual_context_id,request_obj)
             return f"{response}".strip()
         
-        
-        return "很抱歉博士，但是我现在暂时无法回答您的问题。"
+        if use_friendly_error:
+            return "很抱歉博士，但是我现在暂时无法回答您的问题。"
+        else:
+            return None
         
     async def on_message(self, data: Message):
         prefixed_call = False

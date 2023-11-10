@@ -1,5 +1,4 @@
 import time
-import random
 import asyncio
 import json
 import os
@@ -8,17 +7,20 @@ import math
 import time
 import traceback
 
+from peewee import DoesNotExist,fn
+
+from datetime import datetime
+
 from typing import Any, Dict, List, Tuple
 
 from amiyabot import Message, Chain
-
-from core.resource.arknightsGameData import ArknightsGameData, ArknightsGameDataResource
 
 from .core.ask_chat_gpt import ChatGPTDelegate
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance, ChatGPTMessageHandler
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
+from .core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
 
 from .util.string_operation import extract_json
 from .util.datetime_operation import calculate_timestamp_factor
@@ -36,14 +38,28 @@ class TRPGMode(ChatGPTMessageHandler):
         self.storage = ChatLogStorage(bot, delegate, self.channel_id, False)
         self.last_process_time = time.time()
         chat_log_storages[channel_id] = self.storage
+        self.group_name = ""
 
         asyncio.create_task(self.__amiya_loop())
 
+
     def get_config(self, conf: str):
+
+
         if conf is None:
             raise ValueError("Configuration key cannot be None")
+        
+        record = AmiyaBotChatGPTTRPGParamHistory.select().where(
+            (AmiyaBotChatGPTTRPGParamHistory.param_name == conf) &
+            (AmiyaBotChatGPTTRPGParamHistory.team_uuid == "test-team")
+        ).order_by(fn.DESC(AmiyaBotChatGPTTRPGParamHistory.create_at)).first()
+
+        conf_value = None
+        if record:
+            conf_value = record.param_value
+
         if conf == "pc_name_mapping":
-            map_str = self.get_handler_config(conf)
+            map_str = conf_value
             if map_str is None or map_str.strip() == '':
                 return {}
             try:
@@ -52,7 +68,7 @@ class TRPGMode(ChatGPTMessageHandler):
             except json.JSONDecodeError:
                 return {}
         if conf == "item_info" or conf == "loc_info" or conf == "character_info" or conf == "task_info":
-            map_obj = self.get_handler_config(conf)
+            map_obj = conf_value
             if map_obj is None:
                 return []
             converted_list = []
@@ -64,36 +80,26 @@ class TRPGMode(ChatGPTMessageHandler):
                     continue
             return converted_list
         if conf == "env_info":
-            value = self.get_handler_config(conf)
+            value = conf_value
             if value is None:
                 return []
             else:
                 return value
         if conf == "my_id" or conf == "kp_id" or conf == "curr_loc" or conf == "story" or conf == "output_debug":
-            return self.get_handler_config(conf)
+            return conf_value
 
     def set_config(self, conf: str, value):
         if conf is None:
             raise ValueError("Configuration key cannot be None")
         if value is None:
             raise ValueError("Configuration value cannot be None")
-        if conf == "pc_name_mapping":
-            try:
-                json_str = json.dumps(value, ensure_ascii=False)
-                self.set_handler_config(conf, json_str)
-            except (TypeError, OverflowError):
-                raise ValueError(
-                    "Unable to convert the configuration value to JSON")
-        if conf == "item_info" or conf == "loc_info" or conf == "character_info" or conf == "task_info":
-            try:
-                json_string_array = [json.dumps(
-                    item, ensure_ascii=False) for item in value]
-                self.set_handler_config(conf, json_string_array)
-            except (TypeError, OverflowError):
-                raise ValueError(
-                    "Unable to convert the configuration value to JSON")
-        if conf == "my_id" or conf == "kp_id" or conf == "env_info" or conf == "curr_loc" or conf == "story":
-            return self.set_handler_config(conf, value)
+        
+        AmiyaBotChatGPTTRPGParamHistory.create(
+                        team_uuid="test-team",
+                        param_name=conf,
+                        param_value=json.dumps(value, ensure_ascii=False),
+                        create_at=datetime.now()
+                    )
 
     async def on_message(self, data: Message):
 
@@ -102,6 +108,27 @@ class TRPGMode(ChatGPTMessageHandler):
             return
 
         self.storage.enqueue(data)
+
+        self.group_name = ""
+
+        kp_id = self.get_config("kp_id")
+        my_id = self.get_config("my_id")
+        user_type = "OtherPC"
+        if f'{data.user_id}' == f'{kp_id}':
+            user_type = "KP"
+        if f'{data.user_id}' == f'{my_id}':
+            user_type = "Me(Human)"
+
+        AmiyaBotChatGPTTRPGSpeechLog.create(
+            team_uuid="test-team",
+            channel_id=data.channel_id,
+            channel_name=self.group_name,
+            user_id=data.user_id,
+            user_type=user_type,
+            irrelevant=False,
+            data=data.text,
+            create_at=datetime.now()
+        )
 
     async def __amiya_loop(self):
 
@@ -245,9 +272,28 @@ class TRPGMode(ChatGPTMessageHandler):
         return False
 
     async def read_template(self, template_filename) -> str:
+        param_name = f"TEMPLATE-{template_filename}"
+        
+        # 尝试从数据库中检索模板参数
+        try:
+            existing_param = AmiyaBotChatGPTTRPGParamHistory.get(AmiyaBotChatGPTTRPGParamHistory.param_name == param_name)
+            return existing_param.param_value
+        except DoesNotExist:  # 如果数据库中不存在该参数
+            pass
+        
+        # 如果数据库中不存在该参数，从文件中读取并存储到数据库中
         with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
             command = file.read()
+            
+            AmiyaBotChatGPTTRPGParamHistory.create(
+                team_uuid="test-team",
+                param_name=param_name,
+                param_value=command,
+                create_at=datetime.now()
+            )
+            
             return command
+
 
     async def generate_prompt_shard(self) -> Dict[str, str]:
 
@@ -331,6 +377,17 @@ class TRPGMode(ChatGPTMessageHandler):
             await self.send_message(f'{reply}')
             amiya_context = ChatGPTMessageContext(reply, '阿米娅')
             self.storage.recent_messages.append(amiya_context)
+            
+            AmiyaBotChatGPTTRPGSpeechLog.create(
+                team_uuid="test-team",
+                channel_id=self.channel_id,
+                channel_name=self.group_name,
+                user_id="0",
+                user_type="Me(Bot)",
+                irrelevant=False,
+                data=f'{reply}',
+                create_at=datetime.now()
+            )
 
         # ------------------- 单独用Prompt处理信息 -----------------------
 
@@ -566,4 +623,4 @@ class TRPGMode(ChatGPTMessageHandler):
         my_id = self.get_config("my_id")
 
         # await self.instance.send_message(Chain().text(f'{str}'), user_id=my_id)
-        await self.instance.send_message(Chain().text(f'({str})'), channel_id=self.channel_id)
+        await self.instance.send_message(Chain().text(f'{str}'), channel_id=self.channel_id)
