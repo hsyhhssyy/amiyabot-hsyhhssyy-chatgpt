@@ -22,7 +22,6 @@
       "output_activity":false,
       "show_log_in_chat":false
     },
-    "model": "gpt-3.5-turbo",
     "black_list":[]
   }
   

@@ -15,14 +15,13 @@ from typing import Any, Dict, List, Tuple
 
 from amiyabot import Message, Chain
 
-from .core.ask_chat_gpt import ChatGPTDelegate
+from .core.developer_types import BLMAdapter
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance, ChatGPTMessageHandler
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
 from .core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
 
-from .util.string_operation import extract_json
 from .util.datetime_operation import calculate_timestamp_factor
 from .util.complex_math import scale_to_reverse_exponential
 
@@ -32,10 +31,10 @@ chat_log_storages = {}
 
 
 class TRPGMode(ChatGPTMessageHandler):
-    def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id: int, instance) -> None:
-        super().__init__(bot, delegate, channel_id, "trpg_mode_config", instance)
+    def __init__(self, bot: ChatGPTPluginInstance, blm_lib: BLMAdapter, channel_id: int, instance) -> None:
+        super().__init__(bot, blm_lib, channel_id, "trpg_mode_config", instance)
 
-        self.storage = ChatLogStorage(bot, delegate, self.channel_id, False)
+        self.storage = ChatLogStorage(bot, blm_lib, self.channel_id, False)
         self.last_process_time = time.time()
         chat_log_storages[channel_id] = self.storage
         self.group_name = ""
@@ -364,7 +363,11 @@ class TRPGMode(ChatGPTMessageHandler):
         prompt_shards = await self.generate_prompt_shard()
         command = await self.format_template("trpg-templates/amiya-trpg-v0.txt", prompt_shards)
 
-        success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, self.get_model_with_quota())
+        high_cost_model_name = self.bot.get_config('high_cost_model_name')
+
+        success, json_objects = await self.blm_lib.chat_flow(prompt=command,
+                                                             model=high_cost_model_name,
+                                                             channel_id=self.channel_id)
 
         if not success:
             return
@@ -393,7 +396,8 @@ class TRPGMode(ChatGPTMessageHandler):
 
         command = await self.format_template("trpg-templates/amiya-template-trpg-process-info.txt", prompt_shards)
 
-        success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, self.get_model_with_quota())
+        success, json_objects = await self.blm_lib.chat_flow(
+            prompt=command, model=high_cost_model_name, channel_id=self.channel_id)
         if not success or len(json_objects) < 1:
             return
 

@@ -2,10 +2,21 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "api_key": {
-      "title":"API Key",
-      "description":"由OpenAI提供给您的ApiKey，没有的话请到https://platform.openai.com/account/api-keys申请。",
-      "type": "string"
+    "high_cost_model_name": {
+      "title":"性能型模型",
+      "description":"选择一个用于处理复杂任务的模型。",
+      "type": "string",
+      "enum":[
+        "..."
+      ]
+    },
+    "low_cost_model_name": {
+      "title":"经济型模型",
+      "description":"选择一个用于处理琐碎杂事的比较便宜的模型。",
+      "type": "string",
+      "enum":[
+        "..."
+      ]
     },
     "enable_in_this_channel": {
       "title":"默认开启",
@@ -92,40 +103,15 @@
       "description":"开启后将覆盖特定的几个插件的关键词从而保证ChatGPT顺利触发。",
       "type": "boolean"
     },
-    "base_url": {
-      "title":"反向代理Url",
-      "description":"可以填写一个Url作为API的基础路径。该url应该以http开头，结尾不包含斜杠，使用时将会拼接为{base_url}/completion",
-      "type": "string"
-    },
-    "proxy": {
-      "title":"http代理",
-      "description":"可选的一个http或https代理，socks代理不支持",
-      "type": "string"
-    },
-    "model": {
-      "title":"GPT模型",
-      "description":"选择要使用的gpt模型(注意钱包)",
-      "type": "string",
-      "enum": ["gpt-3.5-turbo","gpt-3.5/4 Mixed", "gpt-4"]
-    },
     "black_list": {
       "title":"黑名单",
       "description":"这些人的话，兔兔会直接忽略，不记录也不响应。",
       "type": "array"
-    },
-    "gpt_4_quota": {
-      "title":"GPT4限额",
-      "description":"使用gpt-4模型时生效，限制GPT4的平均每小时调用次数",
-      "type": "integer"
     },
     "show_log": {
       "title":"调试日志",
       "description":"开启后将写入用于调试的大量日志。",
       "type": "boolean"
     }
-  },
-  "required": [
-    "api_key",
-    "model"
-  ]
+  }
 }

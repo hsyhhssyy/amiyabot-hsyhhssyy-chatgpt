@@ -4,7 +4,7 @@ import traceback
 
 from amiyabot import Message,Chain
 
-from .core.ask_chat_gpt import ChatGPTDelegate
+from .core.developer_types import BLMAdapter
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance, ChatGPTMessageHandler
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
@@ -13,10 +13,10 @@ curr_dir = os.path.dirname(__file__)
 chat_log_storages = {}
 
 class OnlineTrollMode(ChatGPTMessageHandler):
-    def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id: int, instance) -> None:
-        super().__init__(bot, delegate, channel_id, "trpg_mode_config", instance)
+    def __init__(self, bot: ChatGPTPluginInstance, blm_lib: BLMAdapter, channel_id: int, instance) -> None:
+        super().__init__(bot, blm_lib, channel_id, "trpg_mode_config", instance)
 
-        self.storage = ChatLogStorage(bot, delegate, self.channel_id, False)
+        self.storage = ChatLogStorage(bot, blm_lib, self.channel_id, False)
         self.last_process_time = time.time()
         chat_log_storages[channel_id] = self.storage
 
@@ -49,8 +49,17 @@ class OnlineTrollMode(ChatGPTMessageHandler):
 
                 command = command.replace("<<LASTWORD>>",last_word)
 
-                success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, ChatGPTDelegate.Model3)
-                if not success or len(json_objects) < 1:
+                model_name = self.bot.get_config('low_cost_model_name',self.channel_id)
+
+                response =  await self.blm_lib.chat_flow(command,model=model_name
+                                                                     ,channel_id= self.channel_id)
+                
+                if response == None:
+                    return
+                
+                json_objects = await self.blm_lib.extract_json(response)
+
+                if len(json_objects) < 1:
                     return
                 
                 json_object = json_objects[0]

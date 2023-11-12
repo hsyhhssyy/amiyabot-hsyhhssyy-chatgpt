@@ -1,7 +1,8 @@
 import json
 from typing import List, Dict, Any
 
-def extract_json(string: str) -> List[Dict[str, Any]]:
+# 已废弃，现在由lib提供
+def __extract_json(string: str) -> List[Dict[str, Any]]:
     json_strings = []
     json_objects = []
     open_brackets = 0

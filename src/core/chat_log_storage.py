@@ -17,9 +17,9 @@ from amiyabot.log import LoggerManager
 
 from ..core.message_context import ChatGPTMessageContext
 from ..core.chatgpt_plugin_instance import ChatGPTPluginInstance
-from ..core.ask_chat_gpt import ChatGPTDelegate
+from ..core.developer_types import BLMAdapter
 
-from ..util.string_operation import extract_json,convert_to_float
+from ..util.string_operation import convert_to_float
 from ..util.complex_math import find_most_recent_cluster,dbscan
 
 curr_dir = os.path.dirname(__file__)
@@ -27,10 +27,10 @@ curr_dir = os.path.dirname(__file__)
 logger = LoggerManager('ChatGPT')
 
 class ChatLogStorage():
-    def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id,collect_data:bool = True):
+    def __init__(self, bot: ChatGPTPluginInstance, blm_lib: BLMAdapter, channel_id,collect_data:bool = True):
         self.recent_messages: List[ChatGPTMessageContext] = []
         self.bot = bot
-        self.delegate = delegate
+        self.blm_lib = blm_lib
         self.channel_id = channel_id
 
         self.average_message_in_60_sec = 0
@@ -80,7 +80,7 @@ class ChatLogStorage():
 
     async def __collect_topic(self):
 
-        # 3.5 的API没必要考虑富哥问题
+        # 因为使用 low_cost_model 的API没必要考虑富哥问题
         # eps = self.mediua_freq * (1 - 0.5 *random.random())  # 单位是 秒
         eps = 120
 
@@ -91,7 +91,7 @@ class ChatLogStorage():
 
             min_samples_factor = 5
 
-            # 3.5 的API没必要考虑富哥问题
+            # 因为使用 low_cost_model 的API没必要考虑富哥问题
             # if self.bot.get_config("model",self.channel_id) == "gpt-4" and self.bot.get_config("im_rich",self.channel_id) != True:
             #    min_samples_factor = 10
 
@@ -225,17 +225,19 @@ class ChatLogStorage():
 
         command = command.replace('<<CONVERSATION>>',request_text)
 
-        # 因为3.5 API 在这个场景下表现也很好，因此这里就不浪费钱调用4的API了
-        success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], self.channel_id,"gpt-3.5-turbo")
+        low_cost_model = self.bot.get_config('low_cost_model_name',self.channel_id)
         
-        # self.debug_log(f"检查对话是否为同一话题:\n{command}\n----------\n{response}")
-
-        json_objects = extract_json(response)
+        response = await self.blm_lib.chat_flow(
+            prompt=command, 
+            model=low_cost_model ,
+            channel_id=self.channel_id
+            )
+        
+        json_objects = self.blm_lib.extract_json(response)
 
         if not json_objects:
             return False,""
 
-        # Assuming you want to check if 'conversation' is True in any of the JSON objects
         for json_obj in json_objects:
             if json_obj.get('conversation', False) == True:
 

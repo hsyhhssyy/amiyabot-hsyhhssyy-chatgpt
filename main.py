@@ -6,13 +6,14 @@ from typing import Optional, Union
 
 from amiyabot import Message,Chain
 
-from core import log
+from core import log,Requirement
+from core import bot as main_bot
 
 from .src.supress_other_plugin import suppress_other_plugin
 
-from .src.core.ask_chat_gpt import ChatGPTDelegate
 from .src.core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
+from .src.core.developer_types import BLMAdapter
 
 from .src.deep_cosplay import DeepCosplay
 from .src.trpg import TRPGMode
@@ -25,42 +26,47 @@ from .src.util.complex_math import frequency_controller
 
 curr_dir = os.path.dirname(__file__)
 
+bot : ChatGPTPluginInstance = None
+
+def dynamic_get_global_config_schema_data():
+    if bot:
+        return bot.generate_global_schema()
+    else:
+        return f'{curr_dir}/global_config_default.json'
+    
+def dynamic_get_channel_config_schema_data():
+    if bot:
+        return bot.generate_channel_schema()
+    else:
+        return f'{curr_dir}/global_config_default.json'
+
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='3.4.6',
+    version='4.0.0',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
     document=f'{curr_dir}/README.md',
+    requirements=[
+        Requirement("amiyabot-blm-library")
+    ],
     channel_config_default=f'{curr_dir}/accessories/channel_config_default.json',
-    channel_config_schema=f'{curr_dir}/accessories/channel_config_schema.json', 
+    channel_config_schema=dynamic_get_channel_config_schema_data, 
     global_config_default=f'{curr_dir}/accessories/global_config_default.json',
-    global_config_schema=f'{curr_dir}/accessories/global_config_schema.json', 
+    global_config_schema=dynamic_get_global_config_schema_data, 
 )
-
-delegate = ChatGPTDelegate()
-delegate.bot = bot
-
 
 def load():
 
-    
     AmiyaBotChatGPTTRPGParamHistory.create_table(safe=True)
     AmiyaBotChatGPTTRPGSpeechLog.create_table(safe=True)
 
-    bot.debug_log(f"ChatGPT Plugin Change Other Handler1：{bot.get_config('override_other_plugin')}")
+    bot.debug_log(f"ChatGPT Plugin Override other plugins：{bot.get_config('override_other_plugin')}")
     loop = asyncio.get_event_loop()
     loop.create_task(suppress_other_plugin(bot))
 
-async def ask_amiya(prompt : Union[str, list],context_id : Optional[str] = None, use_friendly_error:bool = True,
-                     use_conext_prefix : bool = True, use_stop_words : bool = True, model : str = None) -> Optional[str] :
-    temp_amiya = AskAmiya(bot,delegate,None)
-    return await temp_amiya.ask_amiya(prompt,context_id,None,use_friendly_error,use_conext_prefix,use_stop_words, model)
-
-bot.ask_amiya = ask_amiya
 bot.load = load
 
-del ask_amiya
 del load
 
 channel_hander_context = {}
@@ -97,6 +103,12 @@ async def check_talk(data: Message):
 @bot.on_message(verify=check_talk,check_prefix=False,allow_direct=True)
 async def _(data: Message):
 
+    blm_lib : BLMAdapter = main_bot.plugins['amiyabot-blm-library']
+                    
+    if blm_lib is None:
+        bot.debug_log("未加载blm库，无法使用ChatGPT")
+        return
+
     # bot.debug_log(f"触发进入ChatGPT插件 {not data.text}")
 
     if not data.text:
@@ -110,17 +122,15 @@ async def _(data: Message):
 
     bot.debug_log(f'[{data.channel_id:<10}] 模式:{mode} 消息:{data.text_original}')
 
-    if data.text_original.upper().startswith("CHATGPT请问"):
-        success, raw_answer = await delegate.ask_chatgpt_raw([{"role": "user", "content":data.text}])
-        if success:
-            return Chain(data).text(raw_answer)
-        else:
-            return Chain(data).text(raw_answer)
+    if data.text_original.upper().startswith("CHATGPT请问"):        
+        raw_answer = await blm_lib.chat_flow(prompt=data.text,channel_id = data.channel_id)
+        return Chain(data).text(raw_answer)
+    
     elif mode == "角色扮演" and data.channel_id is not None:
         try:
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, DeepCosplay):
-                context = DeepCosplay(bot,delegate,data.channel_id,data.instance)
+                context = DeepCosplay(bot,blm_lib,data.channel_id,data.instance)
                 channel_hander_context[data.channel_id] = context
         except Exception as e:
             log.error(e)
@@ -131,7 +141,7 @@ async def _(data: Message):
         try:
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, OnlineTrollMode):
-                context = OnlineTrollMode(bot,delegate,data.channel_id,data.instance)
+                context = OnlineTrollMode(bot,blm_lib,data.channel_id,data.instance)
                 channel_hander_context[data.channel_id] = context
         except Exception as e:
             log.error(e)
@@ -142,7 +152,7 @@ async def _(data: Message):
         try:
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, TRPGMode):
-                context = TRPGMode(bot,delegate,data.channel_id,data.instance)
+                context = TRPGMode(bot,blm_lib,data.channel_id,data.instance)
                 channel_hander_context[data.channel_id] = context
         except Exception as e:
             log.error(e)
@@ -156,7 +166,7 @@ async def _(data: Message):
         try:
             context = channel_hander_context.get(channel)
             if context is None or not isinstance(context, AskAmiya):
-                context = AskAmiya(bot,delegate,channel)
+                context = AskAmiya(bot,blm_lib,channel)
                 channel_hander_context[channel] = context
         except Exception as e:
             log.error(e)

@@ -14,23 +14,21 @@ from amiyabot import Message, Chain
 
 from core.resource.arknightsGameData import ArknightsGameData, ArknightsGameDataResource
 
-from .core.ask_chat_gpt import ChatGPTDelegate
+from .core.developer_types import BLMAdapter
 from .core.chatgpt_plugin_instance import ChatGPTPluginInstance,ChatGPTMessageHandler
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
-
-from .util.string_operation import extract_json
 from .util.datetime_operation import calculate_timestamp_factor
 from .util.complex_math import scale_to_reverse_exponential
 
 curr_dir = os.path.dirname(__file__)
 
 class DeepCosplay(ChatGPTMessageHandler):
-    def __init__(self, bot: ChatGPTPluginInstance, delegate: ChatGPTDelegate, channel_id: int,instance) -> None:
-        super().__init__(bot, delegate, channel_id, "deep_cosplay_mode_config",instance)
+    def __init__(self, bot: ChatGPTPluginInstance, blm_lib:BLMAdapter, channel_id: int,instance) -> None:
+        super().__init__(bot, blm_lib, channel_id, "deep_cosplay_mode_config",instance)
 
-        self.storage = ChatLogStorage(bot,delegate,self.channel_id)
+        self.storage = ChatLogStorage(bot,blm_lib,self.channel_id)
 
         self.amiya_topic = ""
         self.interest : float = 0
@@ -164,9 +162,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 if should_talk:
                     last_talk = time.time()
                     
-                    model = self.get_model_with_quota()
-                    if model is not None:
-                        await self.ask_amiya(message_in_conversation,no_word_limit,model)
+                    await self.ask_amiya(message_in_conversation,no_word_limit)
 
             except Exception as e:
                 self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
@@ -238,16 +234,18 @@ class DeepCosplay(ChatGPTMessageHandler):
         return detail_text
 
     # 根据一大堆话生成一个回复
-    async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool,model:str) -> bool:
+    async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool) -> bool:
         max_prompt_chars = 1000
         max_chatgpt_chars = 4000
         distinguish_doc = False
 
-        if model is None:
-            return
+        model_name = self.bot.get_config('high_cost_model_name',self.channel_id)
+        model = self.blm_lib.get_model(model_name)
+        self.debug_log(f'使用模型: {model}')
+        max_chatgpt_chars = model["max-token"]
 
-        if  model == "gpt-4":
-            max_chatgpt_chars = 8000
+        # 如果用户的性能型模型设置的确实是高性能模型，那就设置为分辨博士名称。
+        if model["type"] == "high-cost":
             distinguish_doc = True
 
         _,doctor_talks,_ = ChatGPTMessageContext.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
@@ -336,12 +334,12 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return True
 
-    async def get_amiya_response(self, command: str, channel_id: str,model:str) -> Tuple[bool, List[ChatGPTMessageContext],float]:
+    async def get_amiya_response(self, command: str, channel_id: str,model:dict) -> Tuple[bool, List[ChatGPTMessageContext],float]:
 
         if model is None:
             return
 
-        if model == "gpt-4":
+        if model["type"]=="high-cost":
             max_retries = 1
         else:
             max_retries = 3
@@ -365,12 +363,12 @@ class DeepCosplay(ChatGPTMessageHandler):
                 # if self.get_handler_config("silent_mode"):
                 #     success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,"gpt-3.5-turbo")
                 # else:
-                success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,model=model)
+                response = await self.blm_lib.chat_flow(
+                    prompt=command, model=model["model_name"], channel_id=channel_id)
 
-                # self.debug_log(f'ChatGPT原始回复:{response}')
+                json_objects = self.blm_lib.extract_json(response)
 
-                json_objects = extract_json(response)
-
+                self.debug_log(f'ChatGPT原始回复:{json_objects}')
 
                 words_response = None
                 response_with_mental = None
