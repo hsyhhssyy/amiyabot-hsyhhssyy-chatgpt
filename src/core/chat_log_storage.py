@@ -139,7 +139,8 @@ class ChatLogStorage():
                             self.debug_log(f'新话题诞生:{topic}')
                         self.topic = topic
                     else:
-                        self.topic = None
+                        self.debug_log(f'因跑题，丢弃当前话题{self.topic}')
+                        self.topic = ChatLogStorage.NoTopic
 
                     for msg in recent_cluster:
                         if success:
@@ -149,9 +150,9 @@ class ChatLogStorage():
             else:
                 recent_recent_message = self.recent_messages[-self.average_message_in_60_sec:]
                 if all(((not hasattr(msg, 'topic')) or (msg.topic ==  ChatLogStorage.NoTopic) ) for msg in recent_recent_message):
-                    if self.topic is not None:                        
+                    if self.topic is not None and self.topic != ChatLogStorage.NoTopic:                        
                         self.debug_log(f'长时间跑题，回归静默')
-                    self.topic = None
+                        self.topic = ChatLogStorage.NoTopic
 
     async def __collect_average_message_freq_in_1_day(self):
 
@@ -208,24 +209,24 @@ class ChatLogStorage():
 
         topic_content = most_common_topic[0][0] if most_common_topic else None
 
-        _, request_text,_ = ChatGPTMessageContext.pick_prompt(context_list,1000,False)
+        _, request_text,_ = ChatGPTMessageContext.pick_prompt(context_list,1000, True)
 
         if topic_content == ChatLogStorage.NoTopic:
             topic_content = None
 
         if topic_content is not None:
-            with open(f'{curr_dir}/../../templates/conversation-probablity-template-v2.txt', 'r', encoding='utf-8') as file:
+            with open(f'{curr_dir}/../../templates/conversation-probablity-template-v3-u.txt', 'r', encoding='utf-8') as file:
                 command = file.read()
             
             command = command.replace('<<TOPIC>>',topic_content)
 
         else:        
-            with open(f'{curr_dir}/../../templates/conversation-probablity-template-v1.txt', 'r', encoding='utf-8') as file:
+            with open(f'{curr_dir}/../../templates/conversation-probablity-template-v3-c.txt', 'r', encoding='utf-8') as file:
                 command = file.read()
 
         command = command.replace('<<CONVERSATION>>',request_text)
 
-        low_cost_model = self.bot.get_config('low_cost_model_name',self.channel_id)
+        low_cost_model = self.bot.get_model_in_config('low_cost_model_name',self.channel_id)
         
         response = await self.blm_lib.chat_flow(
             prompt=command, 

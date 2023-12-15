@@ -49,7 +49,7 @@ class OnlineTrollMode(ChatGPTMessageHandler):
 
                 command = command.replace("<<LASTWORD>>",last_word)
 
-                model_name = self.bot.get_config('low_cost_model_name',self.channel_id)
+                model_name = self.bot.get_model_in_config('low_cost_model_name',self.channel_id)
 
                 response =  await self.blm_lib.chat_flow(command,model=model_name
                                                                      ,channel_id= self.channel_id)

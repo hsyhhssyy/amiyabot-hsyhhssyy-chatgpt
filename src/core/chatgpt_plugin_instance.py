@@ -25,7 +25,6 @@ logger = LoggerManager('ChatGPT')
 class ChatGPTPluginInstance(AmiyaBotPluginInstance):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model_list = []
 
     def install(self):
         config_file = 'resource/plugins/chatGPT/config.yaml'
@@ -40,21 +39,6 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             if "stop_words" in yamlConfig: self.set_config("stop_words", yamlConfig["stop_words"],None)
             os.remove(config_file)
 
-        def wrapper():
-            while True:
-                if 'amiyabot-blm-library' in main_bot.plugins.keys():
-                    blm_lib = main_bot.plugins['amiyabot-blm-library']
-                    
-                    if blm_lib is not None:
-                        model_list = blm_lib.model_list()
-                        self.model_list = model_list
-                else:
-                    self.debug_log('amiyabot-blm-library plugin not loaded.')
-                    
-                threading.Event().wait(60)  # 等待30秒
-
-        threading.Thread(target=wrapper).start()
-
     def generate_global_schema(self):
 
         filepath = f'{curr_dir}/../../accessories/global_config_schema.json'
@@ -66,21 +50,18 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             self.debug_log(f"Failed to load JSON from {filepath}.")
             return None
         
-        if hasattr(self, 'model_list') and self.model_list is not None:
+        if 'amiyabot-blm-library' in main_bot.plugins.keys():
+            blm_lib = main_bot.plugins['amiyabot-blm-library']
             
-            if self.model_list == []:
-                if 'amiyabot-blm-library' in main_bot.plugins.keys():
-                    blm_lib = main_bot.plugins['amiyabot-blm-library']
-                    
-                    if blm_lib is not None:
-                        model_list = blm_lib.model_list()
-                        self.model_list = model_list
-            try:     
-                data["properties"]["high_cost_model_name"]["enum"] = [model["model_name"] for model in self.model_list]
-                data["properties"]["low_cost_model_name"]["enum"] =  [model["model_name"] for model in self.model_list if model["type"] == "low-cost"]
-            except KeyError as e:
-                stack_trace = traceback.format_exc()
-                self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
+            if blm_lib is not None:
+                model_list = blm_lib.model_list()
+
+                try:     
+                    data["properties"]["high_cost_model_name"]["enum"] = [model["model_name"] for model in model_list]
+                    data["properties"]["low_cost_model_name"]["enum"] =  [model["model_name"] for model in model_list if model["type"] == "low-cost"]
+                except KeyError as e:
+                    stack_trace = traceback.format_exc()
+                    self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
         
         return data
 
@@ -94,19 +75,15 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             self.debug_log(f"Failed to load JSON from {filepath}.")
             return None
         
-        if hasattr(self, 'model_list') and self.model_list is not None:
+        if 'amiyabot-blm-library' in main_bot.plugins.keys():
+            blm_lib = main_bot.plugins['amiyabot-blm-library']
             
-            if self.model_list == []:
-                if 'amiyabot-blm-library' in main_bot.plugins.keys():
-                    blm_lib = main_bot.plugins['amiyabot-blm-library']
-                    
-                    if blm_lib is not None:
-                        model_list = blm_lib.model_list()
-                        self.model_list = model_list
-
+            if blm_lib is not None:
+                model_list = blm_lib.model_list()
+            
             try:     
-                data["properties"]["high_cost_model_name"]["enum"] = [model["model_name"] for model in self.model_list]
-                data["properties"]["low_cost_model_name"]["enum"] =  [model["model_name"] for model in self.model_list if model["type"] == "low-cost"]
+                data["properties"]["high_cost_model_name"]["enum"] = [model["model_name"] for model in model_list] + ["跟随全局..."]
+                data["properties"]["low_cost_model_name"]["enum"] =  [model["model_name"] for model in model_list if model["type"] == "low-cost"] + ["跟随全局..."]
             except KeyError as e:
                 stack_trace = traceback.format_exc()
                 self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
@@ -126,6 +103,14 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
 
     def get_quote_id(self, data):
         return get_quote_id(data)
+
+    def get_model_in_config(self, model_conf_name:str,channel_id:str):
+        model = self.get_config(model_conf_name,channel_id)
+
+        if model == '跟随全局...':
+            model = self.get_config(model_conf_name)
+
+        return model
 
 quota = 0
 

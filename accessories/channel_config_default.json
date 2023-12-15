@@ -22,6 +22,8 @@
       "output_activity":false,
       "show_log_in_chat":false
     },
+    "high_cost_model_name":"跟随全局...",
+    "low_cost_model_name":"跟随全局...",
     "black_list":[]
   }
   

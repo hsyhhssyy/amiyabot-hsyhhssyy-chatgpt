@@ -31,3 +31,20 @@ class AmiyaBotChatGPTTRPGSpeechLog(ModelClass):
     class Meta:
         database = db
         table_name = "amiyabot-hsyhhssyy-chatgpt-trpg-speech-log"
+
+class AmiyaBotChatGPTExecutionLog(ModelClass):
+    id: int = AutoField()
+    team_uuid: str = CharField()
+    channel_id: str = CharField()
+    channel_name: str = CharField()
+    template_name: str = CharField()
+    template_value: str = TextField()
+    model:str = CharField()
+    data: str = TextField()
+    raw_request: str = TextField()
+    raw_response: str = TextField()
+    create_at: datetime = DateTimeField(null=True)
+
+    class Meta:
+        database = db
+        table_name = "amiyabot-hsyhhssyy-chatgpt-chatgpt-exec-log"

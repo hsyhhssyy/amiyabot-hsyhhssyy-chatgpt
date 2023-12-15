@@ -11,7 +11,7 @@
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
       "type": "string",
-      "enum": ["经典模式", "角色扮演","跑团模式","典孝急模式"]
+      "enum": ["经典模式", "角色扮演", "跑团模式（测试中未完成）", "典孝急模式"]
     },
     "normal_mode_config": {
       "title":"常规配置",
@@ -76,7 +76,7 @@
       "description":"选择一个用于处理复杂任务的模型。",
       "type": "string",
       "enum":[
-        "..."
+        "跟随全局..."
       ]
     },
     "low_cost_model_name": {
@@ -84,7 +84,7 @@
       "description":"选择一个用于处理琐碎杂事的比较便宜的模型。",
       "type": "string",
       "enum":[
-        "..."
+        "跟随全局..."
       ]
     },
     "black_list": {

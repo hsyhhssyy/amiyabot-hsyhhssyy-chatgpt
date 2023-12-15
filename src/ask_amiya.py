@@ -31,7 +31,7 @@ class AskAmiya(ChatGPTMessageHandler):
                 return None
         self.user_lock.append(actual_context_id)
 
-        model = self.bot.get_config('high_cost_model_name', channel_id)
+        model = self.bot.get_model_in_config('high_cost_model_name', channel_id)
 
         response = await self.blm_lib.chat_flow(prompt=prompt,
                                                 model=model,

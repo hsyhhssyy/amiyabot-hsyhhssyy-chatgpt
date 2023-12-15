@@ -1,8 +1,16 @@
+import json
+
 from datetime import datetime, timedelta
-from peewee import SelectQuery
-from ..core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
-from core import app
+
 from pydantic import BaseModel
+
+from peewee import SelectQuery
+
+from core import app
+from core import bot as main_bot
+
+from ..core.developer_types import BLMAdapter
+from ..core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
 
 # Pydantic Models
 class ParamByTeam(BaseModel):
@@ -26,6 +34,15 @@ class InsertSpeechLog(BaseModel):
     irrelevant: bool
     data: str
 
+class InsertExecutionLog(BaseModel):
+    team_uuid: str
+    channel_id: str
+    channel_name: str
+    template_name: str
+    template_value: str
+    model:str
+    data: str
+
 @app.controller
 class TRPGAPI:
     # 列出指定team_uuid的两个类的两个接口
@@ -43,6 +60,14 @@ class TRPGAPI:
         query = AmiyaBotChatGPTTRPGSpeechLog.select().where(AmiyaBotChatGPTTRPGSpeechLog.team_uuid == team_uuid)
         result_dicts = [result.__data__ for result in query]
         return app.response({"success": True, "speech_log": result_dicts})
+
+    @app.route(method='post')
+    async def get_execution_log(self, params: SpeechByTeam):
+        team_uuid = params.team_uuid
+        query = AmiyaBotChatGPTExecutionLog.select().where(AmiyaBotChatGPTExecutionLog.team_uuid == team_uuid)
+        result_dicts = [result.__data__ for result in query]
+        return app.response({"success": True, "execution_log": result_dicts})
+
 
     @app.route(method='post')
     async def insert_param_history(self, params: InsertParamHistory):
@@ -74,6 +99,54 @@ class TRPGAPI:
             user_type=user_type,
             irrelevant=irrelevant,
             data=data,
+            create_at=datetime.now()
+        )
+        return app.response({"success": True, "inserted_id": new_entry.id})
+
+    @app.route(method='post')
+    async def insert_execution_log(self, params: InsertExecutionLog):
+
+        blm_lib : BLMAdapter = main_bot.plugins['amiyabot-blm-library']
+
+        if params.template_value is None or params.template_value == "":
+
+            param_name = f"TEMPLATE-{params.template_name}"
+            # 读取Template
+            record = AmiyaBotChatGPTTRPGParamHistory.select().where(
+                (AmiyaBotChatGPTTRPGParamHistory.param_name == param_name) &
+                (AmiyaBotChatGPTTRPGParamHistory.team_uuid == params.team_uuid)
+            ).order_by(AmiyaBotChatGPTTRPGParamHistory.create_at.desc()).first()
+
+            if record is None:
+                return app.response({"success": False, "reason": "No such template"})
+            
+            template = record.param_value
+        
+        else:
+
+            template = params.template_value
+
+        # 从data json获取字典
+        data_dict = json.loads(params.data)
+
+        print(f"{data_dict}")
+
+        for key in data_dict:
+            value = data_dict[key]
+            template = template.replace(f"<<{key}>>",value)
+
+        response = await blm_lib.chat_flow(template,params.model,None,params.channel_id)
+
+        new_entry = AmiyaBotChatGPTExecutionLog.create(
+            team_uuid=params.team_uuid,
+            channel_id=params.channel_id,
+            channel_name=params.channel_name,
+            template_name=params.template_name,
+            template_value=params.template_value,
+            model=params.model,
+            data=params.data,
+            raw_request=template,
+            raw_response=response,
             create_at=datetime.now()
         )
         return app.response({"success": True, "inserted_id": new_entry.id})

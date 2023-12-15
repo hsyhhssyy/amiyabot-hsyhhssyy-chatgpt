@@ -11,7 +11,7 @@ from core import bot as main_bot
 
 from .src.supress_other_plugin import suppress_other_plugin
 
-from .src.core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
+from .src.core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.core.developer_types import BLMAdapter
 
@@ -60,6 +60,7 @@ def load():
 
     AmiyaBotChatGPTTRPGParamHistory.create_table(safe=True)
     AmiyaBotChatGPTTRPGSpeechLog.create_table(safe=True)
+    AmiyaBotChatGPTExecutionLog.create_table(safe=True)
 
     bot.debug_log(f"ChatGPT Plugin Override other plugins：{bot.get_config('override_other_plugin')}")
     loop = asyncio.get_event_loop()

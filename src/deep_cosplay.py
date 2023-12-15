@@ -8,7 +8,11 @@ import math
 import time
 import traceback
 
+from peewee import DoesNotExist,fn
+
 from typing import List, Tuple
+
+from datetime import datetime
 
 from amiyabot import Message, Chain
 
@@ -19,8 +23,12 @@ from .core.chatgpt_plugin_instance import ChatGPTPluginInstance,ChatGPTMessageHa
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
+from .core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTExecutionLog
+
 from .util.datetime_operation import calculate_timestamp_factor
 from .util.complex_math import scale_to_reverse_exponential
+
+storage_team_name = "deep-cosplay"
 
 curr_dir = os.path.dirname(__file__)
 
@@ -117,7 +125,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
     async def __amiya_loop(self):
 
-        last_talk = time.time()
+        last_talk = time.time() - 60*5
 
         while True:
             await asyncio.sleep(5)
@@ -133,7 +141,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                 # 下面列出了所有兔兔可能会回复的条件:
 
                 # 在有话题的情况下，命中reply_check，这个是用来控制对话中消息频率的
-                if self.storage.topic is not None:
+                if self.storage.topic is not None and self.storage.topic != ChatLogStorage.NoTopic:
                     
                     if self.storage.topic != self.amiya_topic:
                         self.interest = float(self.get_handler_config('interest_initial',1000.0))
@@ -155,13 +163,16 @@ class DeepCosplay(ChatGPTMessageHandler):
                 
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
-                    self.debug_log(f'有Quote/Prefix，强制发话')
+                    self.debug_log(f'有Quote/Prefix，强制发话,并切换话题为{self.amiya_topic}')
+                    self.amiya_topic = self.storage.topic
                     should_talk = True
                     no_word_limit = True
 
                 if should_talk:
                     last_talk = time.time()
                     
+                    self.amiya_topic = self.storage.topic
+
                     await self.ask_amiya(message_in_conversation,no_word_limit)
 
             except Exception as e:
@@ -233,13 +244,36 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return detail_text
 
+    async def get_template(self, template_key,template_filename):
+        param_name = f"TEMPLATE-{template_key}"
+        
+        record = AmiyaBotChatGPTTRPGParamHistory.select().where(
+            (AmiyaBotChatGPTTRPGParamHistory.param_name == param_name) &
+            (AmiyaBotChatGPTTRPGParamHistory.team_uuid == storage_team_name)
+        ).order_by(AmiyaBotChatGPTTRPGParamHistory.create_at.desc()).first()
+
+        if record is None:
+            # 不存在该模板，从磁盘写入并返回
+            with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
+                template = file.read()
+                AmiyaBotChatGPTTRPGParamHistory.create(
+                    param_name=param_name,
+                    team_uuid=storage_team_name,
+                    param_value=template,
+                    create_at=datetime.now()
+                )
+                return template
+        else:
+            return record.param_value
+
+
     # 根据一大堆话生成一个回复
     async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool) -> bool:
         max_prompt_chars = 1000
         max_chatgpt_chars = 4000
         distinguish_doc = False
 
-        model_name = self.bot.get_config('high_cost_model_name',self.channel_id)
+        model_name = self.bot.get_model_in_config('high_cost_model_name',self.channel_id)
         model = self.blm_lib.get_model(model_name)
         self.debug_log(f'使用模型: {model}')
         max_chatgpt_chars = model["max-token"]
@@ -248,21 +282,34 @@ class DeepCosplay(ChatGPTMessageHandler):
         if model["type"] == "high-cost":
             distinguish_doc = True
 
-        _,doctor_talks,_ = ChatGPTMessageContext.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
+        _,doctor_talks,picked_context = ChatGPTMessageContext.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
+
+        speech_data = {}
 
         # if(model == "gpt-4"):
         template_filename = "deep-cosplay/amiya-template-v4.txt"
+        topic_template_filename = "deep-cosplay/topic-template-v1.txt"
         # else:
         #     template_filename = "amiya-template-v2.txt"
 
         self.debug_log(f'template select: {model} {template_filename}')
 
-        with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
-            command = file.read()
+        command_template = await self.get_template("amiya-template-v4",template_filename)
+
+        command = command_template
 
         command = command.replace("<<QUERY>>", doctor_talks)
+        speech_data["QUERY"]=doctor_talks
 
-        command = command.replace("<<TOPIC>>", self.amiya_topic)
+        topic_command = await self.get_template("topic-template-v1",topic_template_filename)
+        
+        if self.amiya_topic is None or self.amiya_topic == ChatLogStorage.NoTopic:
+            topic_command = ""
+        else:
+            topic_command = topic_command.replace("<<TOPIC>>", self.amiya_topic)
+
+        command = command.replace("<<TOPIC>>", topic_command)
+        speech_data["TOPIC"]=topic_command
 
         max_prompt_chars = max_chatgpt_chars-len(command)
 
@@ -274,28 +321,43 @@ class DeepCosplay(ChatGPTMessageHandler):
             total_length = sum(len(context.text) for context in filtered_context_list)
             if len(filtered_context_list)>0:
                 average_length = total_length / len(filtered_context_list)
-                word_limit_count = int(random.gauss(average_length*2, average_length))
+                word_limit_count = int(random.gauss(average_length*4, average_length))
         
         if word_limit_count<10:
             word_limit_count = 10
 
-        if word_limit_count > 50:
-            word_limit_count = 50
+        if word_limit_count > 100:
+            word_limit_count = 100
 
         command = command.replace("<<WORD_COUNT>>", f'{word_limit_count}')
+        speech_data["WORD_COUNT"]=f'{word_limit_count}'
 
         self.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
 
         # 拼入干员的客观履历
         operator_detail = ""
 
+        # 在日志里给下面这一小段代码加一个时间记录，看看执行了多久，单位ms
+
+        operatorConcatStartTime = time.time()
+
         for name,operator in ArknightsGameData.operators.items():
             if len(name) > 1:
                 # 不拼入单字干员，免得经常突然提及，尤其是年，阿，令
-                if name in doctor_talks:
+                # if picked_context中的任何一个Item.text含有name
+                if any( (name in context.text and context.user_id != ChatGPTMessageContext.AMIYA_USER_ID ) for context in picked_context):
                     operator_detail += '\n' +  await self.merge_operator_detail(operator)
 
-        command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_detail}')
+        self.debug_log(f'干员详情拼接耗时: {(time.time() - operatorConcatStartTime)*1000:.2f}ms')
+
+        operator_template = ""
+        if operator_detail is not None and operator_detail != "":
+            with open(f'{curr_dir}/../templates/deep-cosplay/operator-data-template-v1.txt', 'r', encoding='utf-8') as file:
+                operator_template = file.read()
+                operator_template = operator_template.replace("<<OPERATOR_DETAIL>>", f'{operator_detail}')
+
+        command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_template}')
+        speech_data["OPERATOR_DETAIL"]=f'{operator_template}'
 
         # 五分钟内的所有内容
         memory_in_time = self.storage.message_after(time.time()- 5 * 60)
@@ -307,12 +369,26 @@ class DeepCosplay(ChatGPTMessageHandler):
         _,memory_str,_ = ChatGPTMessageContext.pick_prompt(memory,max_prompt_chars,distinguish_doc)
 
         command = command.replace("<<MEMORY>>", memory_str)
+        speech_data["MEMORY"]=memory_str
 
         try:
-            success , message_send, content_factor = await self.get_amiya_response(command, self.channel_id,model)
+            success , message_send, content_factor, raw_response = await self.get_amiya_response(command, self.channel_id,model)
         except Exception as e:
             self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
             return False
+
+        AmiyaBotChatGPTExecutionLog.create(
+                team_uuid=storage_team_name,
+                channel_id=self.channel_id,
+                channel_name="",
+                template_name="amiya-template-v4",
+                template_value=command_template,
+                model=model_name,
+                data=json.dumps(speech_data),
+                raw_request=command,
+                raw_response=raw_response,
+                create_at=datetime.now()
+            )
 
         interest_decrease = random.randint(50, 100)
 
@@ -334,10 +410,10 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return True
 
-    async def get_amiya_response(self, command: str, channel_id: str,model:dict) -> Tuple[bool, List[ChatGPTMessageContext],float]:
+    async def get_amiya_response(self, command: str, channel_id: str,model:dict) -> Tuple[bool, List[ChatGPTMessageContext],float, str]:
 
         if model is None:
-            return
+            return False,[],0,""
 
         if model["type"]=="high-cost":
             max_retries = 1
@@ -350,6 +426,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         message_send = []
 
+        response = ""
         corelation_on_topic = 0.8
         corelation_on_conversation = 0.8
 
@@ -405,9 +482,11 @@ class DeepCosplay(ChatGPTMessageHandler):
                                 await self.send_message(f'({activity})',model)
                         
                         if len(message_send) > 3:
-                            # 有时候， API会发疯一样的返回N多行，这里检测到超过3句话就强制拦截不让他说了
-                            # 尤其用3.5的时候更是这样
-                            break
+                            if model["type"]!="high-cost":
+                                # 有时候， API会发疯一样的返回N多行，这里检测到超过3句话就强制拦截不让他说了
+                                # 尤其用3.5的时候更是这样
+                                # 因此使用低性能模型时，只允许三句话
+                                break
 
                 if successful_sent:
                     break
@@ -417,7 +496,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
             if not successful_sent:
                 # 如果重试次数用完仍然没有成功，返回错误信息
-                return False, message_send,interest_factor
+                return False, message_send,interest_factor,""
 
         
             if self.get_handler_config("silent_mode"):
@@ -438,10 +517,10 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         except Exception as e:
             self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
-            return False, message_send,interest_factor
+            return False, message_send,interest_factor,""
         
 
-        return True, message_send,interest_factor
+        return True, message_send,interest_factor,response
 
     # 发送消息到指定频道
     async def send_message(self, message: str, model:str = None):

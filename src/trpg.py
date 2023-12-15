@@ -51,7 +51,7 @@ class TRPGMode(ChatGPTMessageHandler):
         record = AmiyaBotChatGPTTRPGParamHistory.select().where(
             (AmiyaBotChatGPTTRPGParamHistory.param_name == conf) &
             (AmiyaBotChatGPTTRPGParamHistory.team_uuid == "test-team")
-        ).order_by(fn.DESC(AmiyaBotChatGPTTRPGParamHistory.create_at)).first()
+        ).order_by(AmiyaBotChatGPTTRPGParamHistory.create_at.desc()).first()
 
         conf_value = None
         if record:
@@ -363,7 +363,7 @@ class TRPGMode(ChatGPTMessageHandler):
         prompt_shards = await self.generate_prompt_shard()
         command = await self.format_template("trpg-templates/amiya-trpg-v0.txt", prompt_shards)
 
-        high_cost_model_name = self.bot.get_config('high_cost_model_name')
+        high_cost_model_name = self.bot.get_model_in_config('high_cost_model_name')
 
         success, json_objects = await self.blm_lib.chat_flow(prompt=command,
                                                              model=high_cost_model_name,
