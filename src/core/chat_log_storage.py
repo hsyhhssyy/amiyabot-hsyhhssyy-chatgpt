@@ -87,6 +87,14 @@ class ChatLogStorage():
         while True:
             await asyncio.sleep(2)
 
+            # 如果半小时还没有人说话，则丢弃当前话题
+            if self.topic != ChatLogStorage.NoTopic:
+                last_message = self.recent_messages[-1]
+                if last_message.timestamp < time.time() - 1800:
+                    self.topic = ChatLogStorage.NoTopic
+                    self.debug_log(f'因长时间无人说话，丢弃当前话题{self.topic}')
+                    continue
+
             min_samples = self.average_message_in_60_sec # 最少聚类
 
             min_samples_factor = 5
@@ -139,7 +147,8 @@ class ChatLogStorage():
                             self.debug_log(f'新话题诞生:{topic}')
                         self.topic = topic
                     else:
-                        self.debug_log(f'因跑题，丢弃当前话题{self.topic}')
+                        if self.topic != ChatLogStorage.NoTopic:
+                            self.debug_log(f'因跑题，丢弃当前话题{self.topic}')
                         self.topic = ChatLogStorage.NoTopic
 
                     for msg in recent_cluster:

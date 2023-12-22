@@ -11,7 +11,7 @@ from core import bot as main_bot
 
 from .src.supress_other_plugin import suppress_other_plugin
 
-from .src.core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
+from .src.core.trpg_storage import AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.core.developer_types import BLMAdapter
 
@@ -58,7 +58,7 @@ bot = ChatGPTPluginInstance(
 
 def load():
 
-    AmiyaBotChatGPTTRPGParamHistory.create_table(safe=True)
+    AmiyaBotChatGPTParamHistory.create_table(safe=True)
     AmiyaBotChatGPTTRPGSpeechLog.create_table(safe=True)
     AmiyaBotChatGPTExecutionLog.create_table(safe=True)
 

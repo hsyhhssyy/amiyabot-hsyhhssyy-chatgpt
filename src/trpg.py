@@ -20,7 +20,7 @@ from .core.chatgpt_plugin_instance import ChatGPTPluginInstance, ChatGPTMessageH
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
-from .core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog
+from .core.trpg_storage import AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTTRPGSpeechLog
 
 from .util.datetime_operation import calculate_timestamp_factor
 from .util.complex_math import scale_to_reverse_exponential
@@ -48,10 +48,10 @@ class TRPGMode(ChatGPTMessageHandler):
         if conf is None:
             raise ValueError("Configuration key cannot be None")
         
-        record = AmiyaBotChatGPTTRPGParamHistory.select().where(
-            (AmiyaBotChatGPTTRPGParamHistory.param_name == conf) &
-            (AmiyaBotChatGPTTRPGParamHistory.team_uuid == "test-team")
-        ).order_by(AmiyaBotChatGPTTRPGParamHistory.create_at.desc()).first()
+        record = AmiyaBotChatGPTParamHistory.select().where(
+            (AmiyaBotChatGPTParamHistory.param_name == conf) &
+            (AmiyaBotChatGPTParamHistory.team_uuid == "test-team")
+        ).order_by(AmiyaBotChatGPTParamHistory.create_at.desc()).first()
 
         conf_value = None
         if record:
@@ -93,7 +93,7 @@ class TRPGMode(ChatGPTMessageHandler):
         if value is None:
             raise ValueError("Configuration value cannot be None")
         
-        AmiyaBotChatGPTTRPGParamHistory.create(
+        AmiyaBotChatGPTParamHistory.create(
                         team_uuid="test-team",
                         param_name=conf,
                         param_value=json.dumps(value, ensure_ascii=False),
@@ -275,7 +275,7 @@ class TRPGMode(ChatGPTMessageHandler):
         
         # 尝试从数据库中检索模板参数
         try:
-            existing_param = AmiyaBotChatGPTTRPGParamHistory.get(AmiyaBotChatGPTTRPGParamHistory.param_name == param_name)
+            existing_param = AmiyaBotChatGPTParamHistory.get(AmiyaBotChatGPTParamHistory.param_name == param_name)
             return existing_param.param_value
         except DoesNotExist:  # 如果数据库中不存在该参数
             pass
@@ -284,7 +284,7 @@ class TRPGMode(ChatGPTMessageHandler):
         with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
             command = file.read()
             
-            AmiyaBotChatGPTTRPGParamHistory.create(
+            AmiyaBotChatGPTParamHistory.create(
                 team_uuid="test-team",
                 param_name=param_name,
                 param_value=command,

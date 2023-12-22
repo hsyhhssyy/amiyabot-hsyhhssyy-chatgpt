@@ -6,7 +6,7 @@ from amiyabot.database import ModelClass
 
 from core.database.plugin import db
 
-class AmiyaBotChatGPTTRPGParamHistory(ModelClass):
+class AmiyaBotChatGPTParamHistory(ModelClass):
     id: int = AutoField()
     team_uuid: str = CharField()
     param_name: str = CharField()
@@ -15,7 +15,27 @@ class AmiyaBotChatGPTTRPGParamHistory(ModelClass):
 
     class Meta:
         database = db
-        table_name = "amiyabot-hsyhhssyy-chatgpt-trpg-param-history"
+        table_name = "amiyabot-hsyhhssyy-chatgpt-param-history"
+
+    def get_param(param_name,team_uuid):
+        record = AmiyaBotChatGPTParamHistory.select().where(
+            (AmiyaBotChatGPTParamHistory.param_name == param_name) &
+            (AmiyaBotChatGPTParamHistory.team_uuid == team_uuid)
+        ).order_by(AmiyaBotChatGPTParamHistory.create_at.desc()).first()
+
+        if record:
+            return record.param_value
+        else:
+            return None
+    
+    def set_param(param_name,param_value,team_uuid):
+        new_entry = AmiyaBotChatGPTParamHistory.create(
+            team_uuid=team_uuid,
+            param_name=param_name,
+            param_value=param_value,
+            create_at=datetime.now()
+        )
+        return new_entry.id
 
 class AmiyaBotChatGPTTRPGSpeechLog(ModelClass):
     id: int = AutoField()
@@ -47,4 +67,4 @@ class AmiyaBotChatGPTExecutionLog(ModelClass):
 
     class Meta:
         database = db
-        table_name = "amiyabot-hsyhhssyy-chatgpt-chatgpt-exec-log"
+        table_name = "amiyabot-hsyhhssyy-chatgpt-exec-log"

@@ -10,7 +10,7 @@ from core import app
 from core import bot as main_bot
 
 from ..core.developer_types import BLMAdapter
-from ..core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
+from ..core.trpg_storage import AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
 
 # Pydantic Models
 class ParamByTeam(BaseModel):
@@ -50,7 +50,7 @@ class TRPGAPI:
     async def get_param_history_by_name(self, params: ParamByTeam):
         team_uuid = params.team_uuid
         param_name = params.param_name
-        query = AmiyaBotChatGPTTRPGParamHistory.select().where((AmiyaBotChatGPTTRPGParamHistory.team_uuid == team_uuid)&(AmiyaBotChatGPTTRPGParamHistory.param_name == param_name))
+        query = AmiyaBotChatGPTParamHistory.select().where((AmiyaBotChatGPTParamHistory.team_uuid == team_uuid)&(AmiyaBotChatGPTParamHistory.param_name == param_name))
         result_dicts = [result.__data__ for result in query]
         return app.response({"success": True, "param_history": result_dicts})
 
@@ -74,7 +74,7 @@ class TRPGAPI:
         team_uuid = params.team_uuid
         param_name = params.param_name
         param_value = params.param_value
-        new_entry = AmiyaBotChatGPTTRPGParamHistory.create(
+        new_entry = AmiyaBotChatGPTParamHistory.create(
             team_uuid=team_uuid,
             param_name=param_name,
             param_value=param_value,
@@ -112,10 +112,10 @@ class TRPGAPI:
 
             param_name = f"TEMPLATE-{params.template_name}"
             # 读取Template
-            record = AmiyaBotChatGPTTRPGParamHistory.select().where(
-                (AmiyaBotChatGPTTRPGParamHistory.param_name == param_name) &
-                (AmiyaBotChatGPTTRPGParamHistory.team_uuid == params.team_uuid)
-            ).order_by(AmiyaBotChatGPTTRPGParamHistory.create_at.desc()).first()
+            record = AmiyaBotChatGPTParamHistory.select().where(
+                (AmiyaBotChatGPTParamHistory.param_name == param_name) &
+                (AmiyaBotChatGPTParamHistory.team_uuid == params.team_uuid)
+            ).order_by(AmiyaBotChatGPTParamHistory.create_at.desc()).first()
 
             if record is None:
                 return app.response({"success": False, "reason": "No such template"})

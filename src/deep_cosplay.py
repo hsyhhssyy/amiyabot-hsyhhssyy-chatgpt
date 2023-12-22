@@ -10,7 +10,7 @@ import traceback
 
 from peewee import DoesNotExist,fn
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from datetime import datetime
 
@@ -23,7 +23,7 @@ from .core.chatgpt_plugin_instance import ChatGPTPluginInstance,ChatGPTMessageHa
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
-from .core.trpg_storage import AmiyaBotChatGPTTRPGParamHistory,AmiyaBotChatGPTExecutionLog
+from .core.trpg_storage import AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTExecutionLog
 
 from .util.datetime_operation import calculate_timestamp_factor
 from .util.complex_math import scale_to_reverse_exponential
@@ -141,13 +141,16 @@ class DeepCosplay(ChatGPTMessageHandler):
                 # 下面列出了所有兔兔可能会回复的条件:
 
                 # 在有话题的情况下，命中reply_check，这个是用来控制对话中消息频率的
-                if self.storage.topic is not None and self.storage.topic != ChatLogStorage.NoTopic:
-                    
-                    if self.storage.topic != self.amiya_topic:
+                if self.storage.topic != self.amiya_topic:
+                    if self.storage.topic == ChatLogStorage.NoTopic:
+                        self.interest = 0
+                        self.debug_log(f'话题改变 {self.amiya_topic} -> {self.storage.topic} interest drop to 0')
+                    else:
                         self.interest = float(self.get_handler_config('interest_initial',1000.0))
                         self.debug_log(f'话题改变 {self.amiya_topic} -> {self.storage.topic} interest重置:{self.interest}')
-                        self.amiya_topic = self.storage.topic
-        
+                    self.amiya_topic = self.storage.topic
+
+                if self.storage.topic is not None and self.storage.topic != ChatLogStorage.NoTopic:
                     # f_str = [f"{context.nickname}: {context.text} ({context.timestamp})\n"  for context in self.storage.recent_messages[-5:]]
                     # self.debug_log(f'Last 5: {f_str}')
 
@@ -160,7 +163,7 @@ class DeepCosplay(ChatGPTMessageHandler):
                             self.debug_log(f'未够 {inerval_factor} 条消息，阻止发话，interest + 5')
                             # 未命中加5，防止一堆人就这一个话题讨论一天，兔兔一直不插话
                             self.interest = self.interest + 5
-                
+
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
                     self.debug_log(f'有Quote/Prefix，强制发话,并切换话题为{self.amiya_topic}')
@@ -247,25 +250,16 @@ class DeepCosplay(ChatGPTMessageHandler):
     async def get_template(self, template_key,template_filename):
         param_name = f"TEMPLATE-{template_key}"
         
-        record = AmiyaBotChatGPTTRPGParamHistory.select().where(
-            (AmiyaBotChatGPTTRPGParamHistory.param_name == param_name) &
-            (AmiyaBotChatGPTTRPGParamHistory.team_uuid == storage_team_name)
-        ).order_by(AmiyaBotChatGPTTRPGParamHistory.create_at.desc()).first()
+        param_value = AmiyaBotChatGPTParamHistory.get_param(param_name,storage_team_name)
 
-        if record is None:
+        if param_value is None:
             # 不存在该模板，从磁盘写入并返回
             with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
                 template = file.read()
-                AmiyaBotChatGPTTRPGParamHistory.create(
-                    param_name=param_name,
-                    team_uuid=storage_team_name,
-                    param_value=template,
-                    create_at=datetime.now()
-                )
+                AmiyaBotChatGPTParamHistory.set_param(param_name,template,storage_team_name)
                 return template
         else:
-            return record.param_value
-
+            return param_value
 
     # 根据一大堆话生成一个回复
     async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool) -> bool:
@@ -281,10 +275,27 @@ class DeepCosplay(ChatGPTMessageHandler):
         # 如果用户的性能型模型设置的确实是高性能模型，那就设置为分辨博士名称。
         if model["type"] == "high-cost":
             distinguish_doc = True
-
-        _,doctor_talks,picked_context = ChatGPTMessageContext.pick_prompt(context_list,max_prompt_chars,distinguish_doc)    
+ 
 
         speech_data = {}
+
+        # context_list倒着查看,找到第一条阿米娅的消息,然后截断为Query和Memory
+        query_context = None
+        for context in reversed(context_list):
+            if context.user_id == ChatGPTMessageContext.AMIYA_USER_ID:
+                query_context = context
+                break
+        
+        if query_context is None:
+            query_context_index = len(context_list)
+        else:
+            query_context_index = context_list.index(query_context) + 1
+            query_context_index = min(query_context_index, len(context_list))
+
+        query_context_list = context_list[query_context_index:]
+        memory_context_list = context_list[:query_context_index]
+
+        _,doctor_talks,picked_context = ChatGPTMessageContext.pick_prompt(query_context_list,max_prompt_chars,distinguish_doc)
 
         # if(model == "gpt-4"):
         template_filename = "deep-cosplay/amiya-template-v4.txt"
@@ -323,14 +334,17 @@ class DeepCosplay(ChatGPTMessageHandler):
                 average_length = total_length / len(filtered_context_list)
                 word_limit_count = int(random.gauss(average_length*4, average_length))
         
-        if word_limit_count<10:
-            word_limit_count = 10
+            if word_limit_count<10:
+                word_limit_count = 10
 
-        if word_limit_count > 100:
-            word_limit_count = 100
+            if word_limit_count > 100:
+                word_limit_count = 100
 
-        command = command.replace("<<WORD_COUNT>>", f'{word_limit_count}')
-        speech_data["WORD_COUNT"]=f'{word_limit_count}'
+            command = command.replace("<<WORD_COUNT>>", f'你的回答中所有句子的字数应该限制在{word_limit_count}字以内。')
+            speech_data["WORD_COUNT"]=f'你的回答中所有句子的字数应该限制在{word_limit_count}字以内。'
+        else:
+            command = command.replace("<<WORD_COUNT>>", f'')
+            speech_data["WORD_COUNT"]=f''
 
         self.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
 
@@ -359,12 +373,16 @@ class DeepCosplay(ChatGPTMessageHandler):
         command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_template}')
         speech_data["OPERATOR_DETAIL"]=f'{operator_template}'
 
-        # 五分钟内的所有内容
+        # 五分钟内的所有内容 + memory_context_list + 最近20条对话 拼一起作为Memory
         memory_in_time = self.storage.message_after(time.time()- 5 * 60)
-        # 最近20条对话
         memory_in_count = self.storage.recent_messages[-20:]
-        # 二者拼一起作为Memory
-        memory = list(set(memory_in_time).union(set(memory_in_count)))
+        memory = list(set(memory_in_time).union(set(memory_in_count)).union(set(memory_context_list)))
+
+        # 排除重复并按照时间排序
+        memory = sorted(list(set(memory)),key=lambda x:x.timestamp)
+
+        # 剔除用在Query里的内容
+        memory = [context for context in memory if context not in query_context_list]
 
         _,memory_str,_ = ChatGPTMessageContext.pick_prompt(memory,max_prompt_chars,distinguish_doc)
 
