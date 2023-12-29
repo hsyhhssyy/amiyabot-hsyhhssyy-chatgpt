@@ -42,7 +42,7 @@ def dynamic_get_channel_config_schema_data():
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='4.0.0',
+    version='4.1.0',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',
@@ -131,9 +131,10 @@ async def _(data: Message):
         content_to_send =[{ "type": "text", "text": data.text }]
         vision = bot.get_config('vision_enabled',data.channel_id)
         if vision == True:
-            content_to_send = content_to_send +  [{"type":"image_url","url":imgPath} for imgPath in data.image]
-            bot.debug_log(content_to_send)
-            model = bot.get_model_in_config('vision_model_name',data.channel_id)
+            if data.image and len(data.image) > 0:                
+                content_to_send = content_to_send +  [{"type":"image_url","url":imgPath} for imgPath in data.image]
+                bot.debug_log(content_to_send)
+                model = bot.get_model_in_config('vision_model_name',data.channel_id)
 
         raw_answer = await blm_lib.chat_flow(
             prompt=content_to_send,

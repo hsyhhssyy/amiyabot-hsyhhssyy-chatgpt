@@ -31,7 +31,6 @@ class AskAmiya(ChatGPTMessageHandler):
                 return None
         self.user_lock.append(actual_context_id)
 
-        model = self.bot.get_model_in_config('high_cost_model_name', channel_id)
 
         response = await self.blm_lib.chat_flow(prompt=prompt,
                                                 model=model,
@@ -80,7 +79,17 @@ class AskAmiya(ChatGPTMessageHandler):
             if channel_id is None:
                 channel_id = f"User:{data.user_id}"
 
-            amiya_answer = await self.ask_amiya(request_text, context_id, channel_id, True, True, True)
+            content_to_send = [request_text]
+            
+            model = self.bot.get_model_in_config('high_cost_model_name', channel_id)
+            vision = self.bot.get_config('vision_enabled',channel_id)
+            if vision == True:
+                if data.image and len(data.image) > 0:                
+                    content_to_send = content_to_send +  [{"type":"image_url","url":imgPath} for imgPath in data.image]
+                    self.bot.debug_log(content_to_send)
+                    model = self.bot.get_model_in_config('vision_model_name',data.channel_id)
+
+            amiya_answer = await self.ask_amiya(content_to_send, context_id, channel_id, True, True, True, model)
             await data.send(Chain(data, reference=True).text(amiya_answer))
 
         return
