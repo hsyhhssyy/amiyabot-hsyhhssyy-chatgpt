@@ -1,3 +1,4 @@
+import json
 import time
 import random
 import asyncio
@@ -237,16 +238,20 @@ class ChatLogStorage():
 
         low_cost_model = self.bot.get_model_in_config('low_cost_model_name',self.channel_id)
         
-        response = await self.blm_lib.chat_flow(
+        json_str = await self.blm_lib.chat_flow(
             prompt=command, 
             model=low_cost_model ,
-            channel_id=self.channel_id
+            channel_id=self.channel_id,
+            json_mode=True,
             )
         
-        json_objects = self.blm_lib.extract_json(response)
-
-        if not json_objects:
+        if not json_str:
             return False,""
+        
+        json_objects = json.loads(json_str)
+        
+        if not isinstance(json_objects,list):
+            json_objects = [json_objects]
 
         for json_obj in json_objects:
             if json_obj.get('conversation', False) == True:

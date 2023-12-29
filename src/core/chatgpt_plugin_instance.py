@@ -59,6 +59,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
                 try:     
                     data["properties"]["high_cost_model_name"]["enum"] = [model["model_name"] for model in model_list]
                     data["properties"]["low_cost_model_name"]["enum"] =  [model["model_name"] for model in model_list if model["type"] == "low-cost"]
+                    data["properties"]["vision_model_name"]["enum"] =  [model["model_name"] for model in model_list if model["supported_feature"].__contains__("vision")]
                 except KeyError as e:
                     stack_trace = traceback.format_exc()
                     self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
@@ -84,6 +85,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             try:     
                 data["properties"]["high_cost_model_name"]["enum"] = [model["model_name"] for model in model_list] + ["跟随全局..."]
                 data["properties"]["low_cost_model_name"]["enum"] =  [model["model_name"] for model in model_list if model["type"] == "low-cost"] + ["跟随全局..."]
+                data["properties"]["vision_model_name"]["enum"] =  [model["model_name"] for model in model_list if model["supported_feature"].__contains__("vision")] + ["跟随全局..."]
             except KeyError as e:
                 stack_trace = traceback.format_exc()
                 self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")

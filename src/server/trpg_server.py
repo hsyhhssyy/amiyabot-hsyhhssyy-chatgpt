@@ -135,7 +135,11 @@ class TRPGAPI:
             value = data_dict[key]
             template = template.replace(f"<<{key}>>",value)
 
-        response = await blm_lib.chat_flow(template,params.model,None,params.channel_id)
+        response = await blm_lib.chat_flow(
+            prompt=template,
+            model=params.model,
+            channel_id=params.channel_id,
+            json_mode=True)
 
         new_entry = AmiyaBotChatGPTExecutionLog.create(
             team_uuid=params.team_uuid,

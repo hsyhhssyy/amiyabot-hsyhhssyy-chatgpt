@@ -43,6 +43,7 @@ def format_request(text):
 class ChatGPTMessageContext:
     def __init__(self, text, nickname):
         self.text = text
+        self.image_url = []
         self.nickname = nickname
         self.timestamp = time.time()
         self.user_id = ChatGPTMessageContext.AMIYA_USER_ID
@@ -54,9 +55,18 @@ class ChatGPTMessageContext:
     @classmethod
     def from_message(cls, data:Message):
         context = cls(data.text_original, data.nickname)
+        if data.text_original is None or data.text_original == "":
+            if data.image:
+                context.text = "[图片]"
         # context = cls(format_request(data.text_original), data.nickname)
         context.user_id = data.user_id
 
+        if data.image:
+            context.image_url = data.image
+            # for imgPath in data.image:
+            #     imgBytes = download_sync(imgPath)
+            #     pilImage = Image.open(BytesIO(imgBytes))
+            #     images_in_prompt.append(pilImage)
         
         context.is_prefix = data.is_at or data.text_original.startswith(tuple(prefix))
         context.is_quote = get_quote_id(data) != 0

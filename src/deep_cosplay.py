@@ -263,19 +263,10 @@ class DeepCosplay(ChatGPTMessageHandler):
 
     # 根据一大堆话生成一个回复
     async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool) -> bool:
-        max_prompt_chars = 1000
-        max_chatgpt_chars = 4000
-        distinguish_doc = False
+
 
         model_name = self.bot.get_model_in_config('high_cost_model_name',self.channel_id)
         model = self.blm_lib.get_model(model_name)
-        self.debug_log(f'使用模型: {model}')
-        max_chatgpt_chars = model["max-token"]
-
-        # 如果用户的性能型模型设置的确实是高性能模型，那就设置为分辨博士名称。
-        if model["type"] == "high-cost":
-            distinguish_doc = True
- 
 
         speech_data = {}
 
@@ -287,15 +278,49 @@ class DeepCosplay(ChatGPTMessageHandler):
                 break
         
         if query_context is None:
-            query_context_index = len(context_list)
+            query_context_index = 0
         else:
             query_context_index = context_list.index(query_context) + 1
             query_context_index = min(query_context_index, len(context_list))
 
+        self.debug_log(f'query_context_index: {query_context_index}')
+
         query_context_list = context_list[query_context_index:]
         memory_context_list = context_list[:query_context_index]
 
+
+        if self.bot.get_config('vision_enabled', self.channel_id) == True:
+            self.debug_log(f'vision_enabled')
+
+            # 输出所有的image_url
+            for context in query_context_list:
+                self.debug_log(f'context.image_url: {context.image_url}')
+
+            # 判断context_list中是否有图片，如果有图片，切换为使用视觉模型
+            if any(len(context.image_url)>0 for context in query_context_list):
+                self.debug_log(f'检测到图片，切换为使用视觉模型')
+                vision_model_name = self.bot.get_model_in_config('vision_model_name',self.channel_id)
+                vision_model_info = self.blm_lib.get_model(vision_model_name)
+                if vision_model_info is not None:
+                    model = vision_model_info
+                    model_name = vision_model_name
+                    self.debug_log(f'切换为使用视觉模型: {vision_model_name}')
+        
+        self.debug_log(f'使用模型: {model}')
+
+        max_chatgpt_chars = model["max_token"]
+        max_prompt_chars = max_chatgpt_chars / 3
+
+        # 如果用户的性能型模型设置的确实是高性能模型，那就设置为分辨博士名称。
+        distinguish_doc = False
+        if model["type"] == "high-cost":
+            distinguish_doc = True 
+
         _,doctor_talks,picked_context = ChatGPTMessageContext.pick_prompt(query_context_list,max_prompt_chars,distinguish_doc)
+
+        images = []
+        for context in picked_context:
+            images = images + context.image_url
 
         # if(model == "gpt-4"):
         template_filename = "deep-cosplay/amiya-template-v4.txt"
@@ -390,7 +415,7 @@ class DeepCosplay(ChatGPTMessageHandler):
         speech_data["MEMORY"]=memory_str
 
         try:
-            success , message_send, content_factor, raw_response = await self.get_amiya_response(command, self.channel_id,model)
+            success , message_send, content_factor, raw_response = await self.get_amiya_response(command,images, self.channel_id,model)
         except Exception as e:
             self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
             return False
@@ -428,7 +453,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         return True
 
-    async def get_amiya_response(self, command: str, channel_id: str,model:dict) -> Tuple[bool, List[ChatGPTMessageContext],float, str]:
+    async def get_amiya_response(self, command: str, image:list, channel_id: str,model:dict) -> Tuple[bool, List[ChatGPTMessageContext],float, str]:
 
         if model is None:
             return False,[],0,""
@@ -455,18 +480,25 @@ class DeepCosplay(ChatGPTMessageHandler):
             successful_sent = False
             
             while retry_count < max_retries:
-                # if self.get_handler_config("silent_mode"):
-                #     success, response = await self.delegate.ask_chatgpt_raw([{"role": "user", "content": command}], channel_id,"gpt-3.5-turbo")
-                # else:
-                response = await self.blm_lib.chat_flow(
-                    prompt=command, model=model["model_name"], channel_id=channel_id)
+                if self.bot.get_config('vision_enabled', self.channel_id) == True:
+                    command = [{"type":"text","text":command}]
+                    command = command + [{"type":"image_url","url":imgPath} for imgPath in image]
 
-                json_objects = self.blm_lib.extract_json(response)
+                json_str = await self.blm_lib.chat_flow(
+                    prompt=command, model=model["model_name"], channel_id=channel_id,json_mode=True)
+
+                if json_str:
+                    json_objects = json.loads(json_str)
+                else:
+                    json_objects = []
 
                 self.debug_log(f'ChatGPT原始回复:{json_objects}')
 
                 words_response = None
                 response_with_mental = None
+
+                if not isinstance(json_objects, list):
+                    json_objects = [json_objects]
 
                 for json_obj in json_objects:
                     if json_obj.get('role', None) == '阿米娅':

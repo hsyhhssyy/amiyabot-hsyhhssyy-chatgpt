@@ -1,3 +1,4 @@
+import json
 import time
 import os
 import traceback
@@ -51,18 +52,21 @@ class OnlineTrollMode(ChatGPTMessageHandler):
 
                 model_name = self.bot.get_model_in_config('low_cost_model_name',self.channel_id)
 
-                response =  await self.blm_lib.chat_flow(command,model=model_name
-                                                                     ,channel_id= self.channel_id)
+                json_str =  await self.blm_lib.chat_flow(
+                    command,model=model_name,
+                    channel_id= self.channel_id,
+                    json_mode=True)
                 
-                if response == None:
+                if json_str == None:
                     return
-                
-                json_objects = await self.blm_lib.extract_json(response)
 
-                if len(json_objects) < 1:
-                    return
+                json_objects = json.loads(json_str)
                 
-                json_object = json_objects[0]
+                if isinstance(json_object,list):
+                    if len(json_objects) < 1:
+                        return                
+                    json_object = json_objects[0]
+                    
                 word = json_object.get('OptionText', None)
 
                 if word == None:

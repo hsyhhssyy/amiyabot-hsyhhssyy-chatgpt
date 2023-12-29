@@ -1,6 +1,7 @@
 {
   "enable_in_this_channel":false,
-  "mode": "经典模式",
+  "mode": "经典模式",  
+  "vision_enabled":false,
   "deep_cosplay_mode_config":{
       "interest_initial":1000.0,
       "mean_time":30,

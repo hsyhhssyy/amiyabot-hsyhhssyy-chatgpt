@@ -112,7 +112,7 @@ async def _(data: Message):
 
     # bot.debug_log(f"触发进入ChatGPT插件 {not data.text}")
 
-    if not data.text:
+    if not data.text and not data.image:
         return
     
     try:
@@ -121,12 +121,26 @@ async def _(data: Message):
             bot.debug_log(
                 f'Unknown Error {e} \n {traceback.format_exc()}')
 
+    if data.text_original.upper().startswith("CHATGPT请问") or data.text_original.upper().startswith("文心一言请问"):
+        mode = "请问模式"
+
     bot.debug_log(f'[{data.channel_id:<10}] 模式:{mode} 消息:{data.text_original}')
 
-    if data.text_original.upper().startswith("CHATGPT请问"):        
-        raw_answer = await blm_lib.chat_flow(prompt=data.text,channel_id = data.channel_id)
+    if mode == "请问模式":
+        model = bot.get_model_in_config('high_cost_model_name',data.channel_id)
+        content_to_send =[{ "type": "text", "text": data.text }]
+        vision = bot.get_config('vision_enabled',data.channel_id)
+        if vision == True:
+            content_to_send = content_to_send +  [{"type":"image_url","url":imgPath} for imgPath in data.image]
+            bot.debug_log(content_to_send)
+            model = bot.get_model_in_config('vision_model_name',data.channel_id)
+
+        raw_answer = await blm_lib.chat_flow(
+            prompt=content_to_send,
+            channel_id = data.channel_id,
+            model=model
+        )
         return Chain(data).text(raw_answer)
-    
     elif mode == "角色扮演" and data.channel_id is not None:
         try:
             context = channel_hander_context.get(data.channel_id)
@@ -161,6 +175,7 @@ async def _(data: Message):
 
         await context.on_message(data)
     else:
+        # 经典模式
         channel = data.channel_id
         if channel is None:
             channel = f'User:{data.user_id}'

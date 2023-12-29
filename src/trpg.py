@@ -365,12 +365,16 @@ class TRPGMode(ChatGPTMessageHandler):
 
         high_cost_model_name = self.bot.get_model_in_config('high_cost_model_name')
 
-        success, json_objects = await self.blm_lib.chat_flow(prompt=command,
+        json_str = await self.blm_lib.chat_flow(
+            prompt=command,
                                                              model=high_cost_model_name,
-                                                             channel_id=self.channel_id)
+                                                             channel_id=self.channel_id,
+                                                             json_mode=True)
 
-        if not success:
+        if not json_str:
             return
+        
+        json_objects = json.loads(json_str)
 
         amiya_reply = next((json_obj for json_obj in json_objects if json_obj.get(
             'role', None) == '阿米娅'), None)
@@ -396,11 +400,18 @@ class TRPGMode(ChatGPTMessageHandler):
 
         command = await self.format_template("trpg-templates/amiya-template-trpg-process-info.txt", prompt_shards)
 
-        success, json_objects = await self.blm_lib.chat_flow(
-            prompt=command, model=high_cost_model_name, channel_id=self.channel_id)
-        if not success or len(json_objects) < 1:
+        json_str = await self.blm_lib.chat_flow(
+            prompt=command, model=high_cost_model_name, channel_id=self.channel_id,
+            json_mode=True)
+        
+        if not json_str:
             return
+        
+        json_objects = json.loads(json_str)
 
+        if not isinstance(json_objects, list) or len(json_objects) < 1:
+            return
+        
         json_object = json_objects[0]
 
         # 更新世界观情报
