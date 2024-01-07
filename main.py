@@ -164,7 +164,7 @@ async def _(data: Message):
             return
 
         await context.on_message(data)
-    elif mode == "跑团模式" and data.channel_id is not None:
+    elif mode.startswith("跑团模式") and data.channel_id is not None:
         try:
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, TRPGMode):

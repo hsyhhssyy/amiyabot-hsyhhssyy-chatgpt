@@ -74,5 +74,6 @@ class BLMAdapter:
     def get_default_model(self) -> dict:
         ...
 
-    def extract_json(self, string: str) -> List[Union[Dict[str, Any], List[Any]]]:
+    @property
+    def amiyabot_function_calls(self) -> List[BLMFunctionCall]:
         ...

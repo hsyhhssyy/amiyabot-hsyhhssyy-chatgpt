@@ -19,6 +19,8 @@ class ParamByTeam(BaseModel):
 
 class SpeechByTeam(BaseModel):
     team_uuid: str
+    page: int = 1
+    page_size: int = 20
 
 class InsertParamHistory(BaseModel):
     team_uuid: str
@@ -45,6 +47,38 @@ class InsertExecutionLog(BaseModel):
 
 @app.controller
 class TRPGAPI:
+
+    @app.route(method='post')
+    async def list_param(self):
+        # Select all distinct param_name
+        # select param_name,team_uuid from  AmiyaBotChatGPTParamHistory group by param_name,team_uuid;
+        query = AmiyaBotChatGPTParamHistory.select(AmiyaBotChatGPTParamHistory.param_name,AmiyaBotChatGPTParamHistory.team_uuid).group_by(AmiyaBotChatGPTParamHistory.param_name,AmiyaBotChatGPTParamHistory.team_uuid)
+        result_dicts = [result.__data__ for result in query]
+        return app.response({"success": True, "param_list": result_dicts})
+
+    
+    @app.route(method='post')
+    async def list_team(self):
+        # Select all distinct team_uuid
+        # select team_uuid from  AmiyaBotChatGPTParamHistory group by team_uuid;
+        query = AmiyaBotChatGPTParamHistory.select(AmiyaBotChatGPTParamHistory.team_uuid).group_by(AmiyaBotChatGPTParamHistory.team_uuid)
+        result_dicts = [result.__data__ for result in query]
+
+        # Select all distinct team_uuid
+        # select team_uuid from  AmiyaBotChatGPTTRPGSpeechLog group by team_uuid;
+        query = AmiyaBotChatGPTTRPGSpeechLog.select(AmiyaBotChatGPTTRPGSpeechLog.team_uuid).group_by(AmiyaBotChatGPTTRPGSpeechLog.team_uuid)
+        result_dicts += [result.__data__ for result in query]
+
+        # Select all distinct team_uuid
+        # select team_uuid from  AmiyaBotChatGPTExecutionLog group by team_uuid;
+        query = AmiyaBotChatGPTExecutionLog.select(AmiyaBotChatGPTExecutionLog.team_uuid).group_by(AmiyaBotChatGPTExecutionLog.team_uuid)
+        result_dicts += [result.__data__ for result in query]
+
+        # Remove duplicates
+        result_dicts = list({v['team_uuid']:v for v in result_dicts}.values())
+
+        return app.response({"success": True, "team_list": result_dicts})
+
     # 列出指定team_uuid的两个类的两个接口
     @app.route(method='post')
     async def get_param_history_by_name(self, params: ParamByTeam):
@@ -64,7 +98,11 @@ class TRPGAPI:
     @app.route(method='post')
     async def get_execution_log(self, params: SpeechByTeam):
         team_uuid = params.team_uuid
-        query = AmiyaBotChatGPTExecutionLog.select().where(AmiyaBotChatGPTExecutionLog.team_uuid == team_uuid)
+
+        # query = AmiyaBotChatGPTExecutionLog.select().where(AmiyaBotChatGPTExecutionLog.team_uuid == team_uuid)
+        # add paging
+        query = AmiyaBotChatGPTExecutionLog.select().where(AmiyaBotChatGPTExecutionLog.team_uuid == team_uuid).order_by(AmiyaBotChatGPTExecutionLog.create_at.desc()).paginate(params.page,params.page_size)
+        
         result_dicts = [result.__data__ for result in query]
         return app.response({"success": True, "execution_log": result_dicts})
 
@@ -133,12 +171,15 @@ class TRPGAPI:
 
         for key in data_dict:
             value = data_dict[key]
+            if value is None:
+                value = ""
             template = template.replace(f"<<{key}>>",value)
 
         response = await blm_lib.chat_flow(
             prompt=template,
             model=params.model,
             channel_id=params.channel_id,
+            functions=blm_lib.amiyabot_function_calls,
             json_mode=True)
 
         new_entry = AmiyaBotChatGPTExecutionLog.create(

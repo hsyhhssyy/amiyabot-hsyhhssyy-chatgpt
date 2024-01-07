@@ -20,7 +20,7 @@ from .core.chatgpt_plugin_instance import ChatGPTPluginInstance, ChatGPTMessageH
 from .core.message_context import ChatGPTMessageContext
 from .core.chat_log_storage import ChatLogStorage
 
-from .core.trpg_storage import AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTTRPGSpeechLog
+from .core.trpg_storage import AmiyaBotChatGPTExecutionLog, AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTTRPGSpeechLog
 
 from .util.datetime_operation import calculate_timestamp_factor
 from .util.complex_math import scale_to_reverse_exponential
@@ -39,11 +39,12 @@ class TRPGMode(ChatGPTMessageHandler):
         chat_log_storages[channel_id] = self.storage
         self.group_name = ""
 
+        self.team_uuid = "test-team"
+
         asyncio.create_task(self.__amiya_loop())
 
 
     def get_config(self, conf: str):
-
 
         if conf is None:
             raise ValueError("Configuration key cannot be None")
@@ -55,17 +56,17 @@ class TRPGMode(ChatGPTMessageHandler):
 
         conf_value = None
         if record:
-            conf_value = record.param_value
+            try:
+                conf_value = json.loads(record.param_value)            
+            except json.JSONDecodeError:
+                conf_value = None
 
         if conf == "pc_name_mapping":
             map_str = conf_value
-            if map_str is None or map_str.strip() == '':
-                return {}
-            try:
-                json_object = json.loads(map_str)
-                return json_object
-            except json.JSONDecodeError:
-                return {}
+            if map_str is None:
+                return {}            
+            return map_str
+        
         if conf == "item_info" or conf == "loc_info" or conf == "character_info" or conf == "task_info":
             map_obj = conf_value
             if map_obj is None:
@@ -270,30 +271,25 @@ class TRPGMode(ChatGPTMessageHandler):
 
         return False
 
-    async def read_template(self, template_filename) -> str:
-        param_name = f"TEMPLATE-{template_filename}"
+    async def get_template(self, template_key,template_filename):
+        param_name = f"TEMPLATE-{template_key}"
         
-        # 尝试从数据库中检索模板参数
-        try:
-            existing_param = AmiyaBotChatGPTParamHistory.get(AmiyaBotChatGPTParamHistory.param_name == param_name)
-            return existing_param.param_value
-        except DoesNotExist:  # 如果数据库中不存在该参数
-            pass
+        param_value = AmiyaBotChatGPTParamHistory.get_param(param_name,self.team_uuid)
+
+        if param_value is None:
+            # 不存在该模板，从磁盘写入并返回
+            if not os.path.exists(f'{curr_dir}/../templates/{template_filename}'):
+                raise ValueError(
+                    f"Template file {template_filename} does not exist")
+            with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
+                template = file.read()
+                self.bot.debug_log(f'Writing template:\n{template}')
+                AmiyaBotChatGPTParamHistory.set_param(param_name,template,self.team_uuid)
+                return template
+        else:
+            # self.bot.debug_log(f'Reading template:\n{param_value}')
+            return param_value
         
-        # 如果数据库中不存在该参数，从文件中读取并存储到数据库中
-        with open(f'{curr_dir}/../templates/{template_filename}', 'r', encoding='utf-8') as file:
-            command = file.read()
-            
-            AmiyaBotChatGPTParamHistory.create(
-                team_uuid="test-team",
-                param_name=param_name,
-                param_value=command,
-                create_at=datetime.now()
-            )
-            
-            return command
-
-
     async def generate_prompt_shard(self) -> Dict[str, str]:
 
         prompt_shards: Dict[str, str] = {}
@@ -305,65 +301,71 @@ class TRPGMode(ChatGPTMessageHandler):
 
         _, doctor_talks, _ = self.pick_prompt(context_list)
 
-        prompt_shards["<<CONVERSATION>>"] = doctor_talks
+        prompt_shards["CONVERSATION"] = doctor_talks
 
         curr_loc = self.get_config('curr_loc')
         if curr_loc is None:
             curr_loc = "未知地点"
-        prompt_shards["<<CURRENT_LOCATION>>"] = curr_loc
+        prompt_shards["CURRENT_LOCATION"] = curr_loc
 
         loc_info = self.get_config('loc_info')
-        prompt_shards["<<LOCATION>>"] = json.dumps(
+        prompt_shards["LOCATION"] = json.dumps(
             loc_info, ensure_ascii=False)
 
-        prompt_shards["<<LOCATION_NAME>>"] = ",".join(
+        prompt_shards["LOCATION_NAME"] = ",".join(
             [item["名称"] for item in loc_info if "名称" in item])
 
         item_info = self.get_config('item_info')
-        prompt_shards["<<INVENTORY>>"] = json.dumps(
+        prompt_shards["INVENTORY"] = json.dumps(
             item_info, ensure_ascii=False)
 
-        prompt_shards["<<INVENTORY_ITEM_NAME>>"] = ",".join(
+        prompt_shards["INVENTORY_ITEM_NAME"] = ",".join(
             [item["名称"] for item in item_info if "名称" in item])
 
         inventory_quantity = [{"名称": item.get("名称"), "数量": item.get("数量"), "单位": item.get(
             "单位")} for item in item_info if "名称" in item and "数量" in item and "单位" in item]
-        prompt_shards["<<INVENTORY_QUANTITY>>"] = json.dumps(
+        prompt_shards["INVENTORY_QUANTITY"] = json.dumps(
             inventory_quantity, ensure_ascii=False)
 
         env_info = self.get_config('env_info')
-        prompt_shards["<<INFORMATION>>"] = "\n".join(env_info)
+        prompt_shards["INFORMATION"] = "\n".join(env_info)
 
 
         task_info = self.get_config('task_info')
-        prompt_shards["<<TASK>>"] = json.dumps(
+        prompt_shards["TASK"] = json.dumps(
             task_info, ensure_ascii=False)
 
         chara_info = self.get_config('character_info')
-        prompt_shards["<<CHARACTER>>"] = json.dumps(
+        prompt_shards["CHARACTER"] = json.dumps(
             chara_info, ensure_ascii=False)
-        prompt_shards["<<CHARACTER_NAME>>"] = ",".join(
+        prompt_shards["CHARACTER_NAME"] = ",".join(
             [item["名称"] for item in chara_info if "名称" in item])
         
         story = self.get_config('story')
-        prompt_shards["<<STORY>>"] = story
+        prompt_shards["STORY"] = story
 
         return prompt_shards
 
-    async def format_template(self, template: str, shard: Dict[str, str]):
-        command = await self.read_template(template)
+    async def format_template(self, template_key: str, template_file: str, shard: Dict[str, str]):
+        template_value = await self.get_template(template_key, template_file)
+
+        command = template_value
 
         for key, val in shard.items():
-            command = command.replace(key, val)
+            if val is None:
+                val = ""
+            command = command.replace(f'<<{key}>>', val)
 
-        return command
+        return command, template_value
 
     async def response_to_pc(self):
 
         prompt_shards = await self.generate_prompt_shard()
-        command = await self.format_template("trpg-templates/amiya-trpg-v0.txt", prompt_shards)
+        command,template_value = await self.format_template("trpg-talk-v0","trpg-templates/amiya-trpg-v0.txt", prompt_shards)
 
-        high_cost_model_name = self.bot.get_model_in_config('high_cost_model_name')
+        high_cost_model_name = self.bot.get_model_in_config('high_cost_model_name',self.channel_id)
+
+        self.debug_log(f'model:{high_cost_model_name}')
 
         json_str = await self.blm_lib.chat_flow(
             prompt=command,
@@ -376,8 +378,12 @@ class TRPGMode(ChatGPTMessageHandler):
         
         json_objects = json.loads(json_str)
 
-        amiya_reply = next((json_obj for json_obj in json_objects if json_obj.get(
+        if isinstance(json_objects, list) and len(json_objects) > 0:
+            amiya_reply = next((json_obj for json_obj in json_objects if json_obj.get(
             'role', None) == '阿米娅'), None)
+        else:
+            amiya_reply = json_objects
+        
         replies = amiya_reply.get('replys', [])
 
         for reply in replies:
@@ -386,7 +392,7 @@ class TRPGMode(ChatGPTMessageHandler):
             self.storage.recent_messages.append(amiya_context)
             
             AmiyaBotChatGPTTRPGSpeechLog.create(
-                team_uuid="test-team",
+                team_uuid=self.team_uuid,
                 channel_id=self.channel_id,
                 channel_name=self.group_name,
                 user_id="0",
@@ -395,10 +401,23 @@ class TRPGMode(ChatGPTMessageHandler):
                 data=f'{reply}',
                 create_at=datetime.now()
             )
+            
+        AmiyaBotChatGPTExecutionLog.create(
+                team_uuid=self.team_uuid,
+                channel_id=self.channel_id,
+                channel_name="",
+                template_name="trpg-talk-v0",
+                template_value=template_value,
+                model=high_cost_model_name,
+                data=json.dumps(prompt_shards),
+                raw_request=command,
+                raw_response=json_str,
+                create_at=datetime.now()
+            )
 
         # ------------------- 单独用Prompt处理信息 -----------------------
 
-        command = await self.format_template("trpg-templates/amiya-template-trpg-process-info.txt", prompt_shards)
+        command,template_value = await self.format_template("trpg-process-info-v0","trpg-templates/amiya-template-trpg-process-info-v0.txt", prompt_shards)
 
         json_str = await self.blm_lib.chat_flow(
             prompt=command, model=high_cost_model_name, channel_id=self.channel_id,
@@ -407,12 +426,25 @@ class TRPGMode(ChatGPTMessageHandler):
         if not json_str:
             return
         
+        AmiyaBotChatGPTExecutionLog.create(
+                team_uuid=self.team_uuid,
+                channel_id=self.channel_id,
+                channel_name="",
+                template_name="trpg-process-info-v0",
+                template_value=template_value,
+                model=high_cost_model_name,
+                data=json.dumps(prompt_shards),
+                raw_request=command,
+                raw_response=json_str,
+                create_at=datetime.now()
+            )
+
         json_objects = json.loads(json_str)
 
-        if not isinstance(json_objects, list) or len(json_objects) < 1:
-            return
-        
-        json_object = json_objects[0]
+        if isinstance(json_objects, list) and len(json_objects) > 0:
+            json_object = json_objects[0]
+        else:
+            json_object = json_objects
 
         # 更新世界观情报
         env_info = self.get_config('env_info')
@@ -606,7 +638,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
         self.set_config('task_info', task_info)
 
-        story_info = self.get_config('story')
+        story_info =  json_object.get("story")
 
         if story_info is not None:
             self.set_config('story', story_info)
@@ -622,7 +654,7 @@ class TRPGMode(ChatGPTMessageHandler):
         # 整理世界观情报
         if len(env_info) > 30:
             prompt_shards["INFORMATION_COUNT"] = "20"
-            command = await self.format_template("trpg-templates/amiya-template-trpg-organize-information-v0.txt", prompt_shards)
+            command = await self.format_template("trpg-organize-information-v0","trpg-templates/amiya-template-trpg-organize-information-v0.txt", prompt_shards)
             success, json_objects = await self.delegate.ask_chatgpt_with_json(command, self.channel_id, self.get_model_with_quota())
 
             if success:

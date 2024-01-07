@@ -49,8 +49,10 @@ class ChatGPTMessageContext:
         self.user_id = ChatGPTMessageContext.AMIYA_USER_ID
         self.is_quote = False
         self.is_prefix = False
+        self.type = "text"
 
     AMIYA_USER_ID = 0
+    MESSAGE_CONTENT_IMAGE = "[图片]"
 
     @classmethod
     def from_message(cls, data:Message):

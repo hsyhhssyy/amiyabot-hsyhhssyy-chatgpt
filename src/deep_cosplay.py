@@ -16,6 +16,7 @@ from datetime import datetime
 
 from amiyabot import Message, Chain
 
+from core import bot as main_bot
 from core.resource.arknightsGameData import ArknightsGameData, ArknightsGameDataResource
 
 from .core.developer_types import BLMAdapter
@@ -323,14 +324,14 @@ class DeepCosplay(ChatGPTMessageHandler):
             images = images + context.image_url
 
         # if(model == "gpt-4"):
-        template_filename = "deep-cosplay/amiya-template-v4.txt"
+        template_filename = "deep-cosplay/amiya-template-v5.txt"
         topic_template_filename = "deep-cosplay/topic-template-v1.txt"
         # else:
         #     template_filename = "amiya-template-v2.txt"
 
         self.debug_log(f'template select: {model} {template_filename}')
 
-        command_template = await self.get_template("amiya-template-v4",template_filename)
+        command_template = await self.get_template("amiya-template-v5",template_filename)
 
         command = command_template
 
@@ -373,30 +374,30 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         self.debug_log(f'加入最多{max_prompt_chars}字的memory，WordCount是{word_limit_count}/{average_length}')
 
-        # 拼入干员的客观履历
-        operator_detail = ""
+        # # 拼入干员的客观履历
+        # operator_detail = ""
 
-        # 在日志里给下面这一小段代码加一个时间记录，看看执行了多久，单位ms
+        # # 在日志里给下面这一小段代码加一个时间记录，看看执行了多久，单位ms
 
-        operatorConcatStartTime = time.time()
+        # operatorConcatStartTime = time.time()
 
-        for name,operator in ArknightsGameData.operators.items():
-            if len(name) > 1:
-                # 不拼入单字干员，免得经常突然提及，尤其是年，阿，令
-                # if picked_context中的任何一个Item.text含有name
-                if any( (name in context.text and context.user_id != ChatGPTMessageContext.AMIYA_USER_ID ) for context in picked_context):
-                    operator_detail += '\n' +  await self.merge_operator_detail(operator)
+        # for name,operator in ArknightsGameData.operators.items():
+        #     if len(name) > 1:
+        #         # 不拼入单字干员，免得经常突然提及，尤其是年，阿，令
+        #         # if picked_context中的任何一个Item.text含有name
+        #         if any( (name in context.text and context.user_id != ChatGPTMessageContext.AMIYA_USER_ID ) for context in picked_context):
+        #             operator_detail += '\n' +  await self.merge_operator_detail(operator)
 
-        self.debug_log(f'干员详情拼接耗时: {(time.time() - operatorConcatStartTime)*1000:.2f}ms')
+        # self.debug_log(f'干员详情拼接耗时: {(time.time() - operatorConcatStartTime)*1000:.2f}ms')
 
-        operator_template = ""
-        if operator_detail is not None and operator_detail != "":
-            with open(f'{curr_dir}/../templates/deep-cosplay/operator-data-template-v1.txt', 'r', encoding='utf-8') as file:
-                operator_template = file.read()
-                operator_template = operator_template.replace("<<OPERATOR_DETAIL>>", f'{operator_detail}')
+        # operator_template = ""
+        # if operator_detail is not None and operator_detail != "":
+        #     with open(f'{curr_dir}/../templates/deep-cosplay/operator-data-template-v1.txt', 'r', encoding='utf-8') as file:
+        #         operator_template = file.read()
+        #         operator_template = operator_template.replace("<<OPERATOR_DETAIL>>", f'{operator_detail}')
 
-        command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_template}')
-        speech_data["OPERATOR_DETAIL"]=f'{operator_template}'
+        # command = command.replace("<<OPERATOR_DETAIL>>", f'{operator_template}')
+        # speech_data["OPERATOR_DETAIL"]=f'{operator_template}'
 
         # 五分钟内的所有内容 + memory_context_list + 最近20条对话 拼一起作为Memory
         memory_in_time = self.storage.message_after(time.time()- 5 * 60)
@@ -485,13 +486,18 @@ class DeepCosplay(ChatGPTMessageHandler):
                     command = command + [{"type":"image_url","url":imgPath} for imgPath in image]
 
                 json_str = await self.blm_lib.chat_flow(
-                    prompt=command, model=model["model_name"], channel_id=channel_id,json_mode=True)
+                    prompt=command, model=model["model_name"],
+                    channel_id=channel_id,
+                    # functions=self.blm_lib.amiyabot_function_calls,
+                    json_mode=True
+                )
 
                 if json_str:
                     json_objects = json.loads(json_str)
                 else:
                     json_objects = []
 
+                response = json_str
                 self.debug_log(f'ChatGPT原始回复:{json_objects}')
 
                 words_response = None
@@ -502,6 +508,7 @@ class DeepCosplay(ChatGPTMessageHandler):
 
                 for json_obj in json_objects:
                     if json_obj.get('role', None) == '阿米娅':
+                        response_type = json_obj.get('type', "text")
                         words_response = json_obj.get('reply', None)
                         response_with_mental = words_response
                         if self.get_handler_config('output_mental', False) == True:
@@ -522,14 +529,25 @@ class DeepCosplay(ChatGPTMessageHandler):
                             interest_factor = temp_interest_factor
 
                         amiya_context = ChatGPTMessageContext(words_response, '阿米娅')
-                        await self.send_message(response_with_mental,model)
+
+                        debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest},Model:{model}}}'
+                        if self.get_handler_config("show_log_in_chat"):
+                            response_with_mental = f"{debug_info}\n{response_with_mental}"
+
+                        if response_type == "text":
+                            self.debug_log(f'ChatGPT Text回复:{words_response}')
+                            await self.send_message(response_with_mental)
+                        elif response_type == "image_url":
+                            self.debug_log(f'ChatGPT Image回复:{words_response}')
+                            await self.send_image(words_response)
+
                         message_send.append(amiya_context)
                         successful_sent = True
 
                         if self.get_handler_config('output_activity', False) == True:
                             activity = json_obj.get('activity', None)
                             if activity is not None and activity != "":
-                                await self.send_message(f'({activity})',model)
+                                await self.send_message(f'({activity})')
                         
                         if len(message_send) > 3:
                             if model["type"]!="high-cost":
@@ -573,16 +591,9 @@ class DeepCosplay(ChatGPTMessageHandler):
         return True, message_send,interest_factor,response
 
     # 发送消息到指定频道
-    async def send_message(self, message: str, model:str = None):
+    async def send_message(self, message: str):
         if message is None:
             return
-
-        debug_info =  f'{{Topic:"{self.amiya_topic}",Interest:{self.interest},Model:{model}}}'
-
-        self.debug_log(f'show_log_in_chat:{self.get_handler_config("show_log_in_chat")}')
-
-        if self.get_handler_config("show_log_in_chat"):
-            message = f"{debug_info}\n{message}"
 
         messageChain = Chain().text(f'{message}')
 
@@ -592,4 +603,26 @@ class DeepCosplay(ChatGPTMessageHandler):
         if message == DeepCosplay.ERROR_REPLY:
             return
         
+        await self.instance.send_message(messageChain,channel_id=self.channel_id)
+    
+    async def send_image(self, image_url: str):
+        if image_url is None:
+            return
+        
+        if image_url.startswith('https://res.amiyabot.com/plugins/'):
+            # example: https://res.amiyabot.com/plugins/amiyabot-arknights-operator/aff579021e2049b785b3d68c87116374.png
+            # 截取里面的plugin id
+            plugin_id = image_url.split('/')[4]
+
+            plugin_instance = main_bot.plugins[plugin_id]
+
+            html = plugin_instance.image_to_html_map[image_url]
+
+            messageChain = Chain().html(html["template"],html["data"])
+        else:
+            messageChain = Chain().image(image_url)
+
+        if self.get_handler_config("silent_mode"):
+            return
+
         await self.instance.send_message(messageChain,channel_id=self.channel_id)

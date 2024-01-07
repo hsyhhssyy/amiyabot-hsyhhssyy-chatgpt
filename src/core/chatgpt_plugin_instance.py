@@ -109,7 +109,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
     def get_model_in_config(self, model_conf_name:str,channel_id:str):
         model = self.get_config(model_conf_name,channel_id)
 
-        if model == '跟随全局...':
+        if model == '跟随全局...' or model == None:
             model = self.get_config(model_conf_name)
 
         return model
