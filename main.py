@@ -42,7 +42,7 @@ def dynamic_get_channel_config_schema_data():
 
 bot = ChatGPTPluginInstance(
     name='ChatGPT 智能回复',
-    version='4.1.0',
+    version='4.1.1',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 OpenAI ChatGPT 智能回复普通对话',

@@ -169,7 +169,7 @@ class TRPGMode(ChatGPTMessageHandler):
                 if response_sent == False:
                     context_list = self.storage.message_after(
                         self.last_process_time)
-                    _, doctor_talks, _ = self.pick_prompt(context_list, 4000)
+                    doctor_talks = self.pick_prompt(context_list, 12000)
                     if len(doctor_talks) > 1000:
                         # 积压的消息要超字数了，触发一次说话防止丢消息
                         await self.send_message(f'阿米娅好像想要说点什么...')
@@ -185,11 +185,8 @@ class TRPGMode(ChatGPTMessageHandler):
                 self.debug_log(
                     f'Unknown Error {e} \n {traceback.format_exc()}')
 
-    def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=4000) -> Tuple[list, str, list]:
+    def pick_prompt(self, context_list: List[ChatGPTMessageContext], max_chars=12000) -> str:
 
-        request_obj = []
-
-        picked_context = []
         text_to_append = ""
 
         # 获得几个naming相关内容
@@ -205,7 +202,7 @@ class TRPGMode(ChatGPTMessageHandler):
             context = context_list[-i]
             if context.user_id != ChatGPTMessageContext.AMIYA_USER_ID:
                 if f'{context.user_id}' == f'{kp_id}':
-                    text_to_append = f'{context.text}'
+                    text_to_append = f'(主持人说){context.text}'
                 elif f'{context.user_id}' == f'{my_id}':
                     text_to_append = f'{my_name}:{context.text}'
                 elif f'{context.user_id}' in pc_mapping.keys():
@@ -215,18 +212,9 @@ class TRPGMode(ChatGPTMessageHandler):
             if len(result) + len(text_to_append) + 1 <= max_chars:
                 # 如果拼接后的长度还没有超过max_chars个字符，就继续拼接
                 result = text_to_append + "\n" + result
-                if context.user_id != 0:
-                    request_obj.append(
-                        {"role": "user", "content": context.text})
-                else:
-                    request_obj.append(
-                        {"role": "assistant", "content": context.text})
-                picked_context.append(context)
             else:
                 break
-        request_obj.reverse()
-        picked_context.reverse()
-        return request_obj, result, picked_context
+        return result
 
     async def check_command(self, data):
         # 使用正则表达式匹配 "(@XXXX)设置PC名称巨神兵" 这种格式的消息
@@ -299,7 +287,7 @@ class TRPGMode(ChatGPTMessageHandler):
 
         self.debug_log(f'{context_list}')
 
-        _, doctor_talks, _ = self.pick_prompt(context_list)
+        doctor_talks = self.pick_prompt(context_list)
 
         prompt_shards["CONVERSATION"] = doctor_talks
 
