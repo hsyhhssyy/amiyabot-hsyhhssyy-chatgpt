@@ -44,7 +44,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
         filepath = f'{curr_dir}/../../accessories/global_config_schema.json'
 
         try:
-            with open(filepath, 'r') as file:
+            with open(filepath, 'r', encoding='utf-8') as file:
                 data = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             self.debug_log(f"Failed to load JSON from {filepath}.")
@@ -70,7 +70,7 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
         filepath = f'{curr_dir}/../../accessories/channel_config_schema.json'
 
         try:
-            with open(filepath, 'r') as file:
+            with open(filepath, 'r', encoding='utf-8') as file:
                 data = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             self.debug_log(f"Failed to load JSON from {filepath}.")
