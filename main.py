@@ -48,7 +48,7 @@ bot = ChatGPTPluginInstance(
     description='调用 OpenAI ChatGPT 智能回复普通对话',
     document=f'{curr_dir}/README.md',
     requirements=[
-        Requirement("amiyabot-blm-library",'1.2.1',True)
+        Requirement("amiyabot-blm-library")
     ],
     channel_config_default=f'{curr_dir}/accessories/channel_config_default.json',
     channel_config_schema=dynamic_get_channel_config_schema_data, 

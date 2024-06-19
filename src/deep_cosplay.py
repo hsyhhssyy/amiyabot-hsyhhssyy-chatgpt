@@ -4,7 +4,7 @@ import random
 import asyncio
 import os
 import re
-import math
+import requests
 import time
 import traceback
 
@@ -31,7 +31,11 @@ from .util.complex_math import scale_to_reverse_exponential
 
 storage_team_name = "deep-cosplay"
 
+template_filename = "deep-cosplay/amiya-template-v6.1.txt"
+topic_template_filename = "deep-cosplay/topic-template-v1.1.txt"
+
 curr_dir = os.path.dirname(__file__)
+dir_path = f"{curr_dir}/../../../resource/blm_library/img_cache"
 
 class DeepCosplay(ChatGPTMessageHandler):
     def __init__(self, bot: ChatGPTPluginInstance, blm_lib:BLMAdapter, channel_id: int,instance) -> None:
@@ -324,21 +328,21 @@ class DeepCosplay(ChatGPTMessageHandler):
             images = images + context.image_url
 
         # if(model == "gpt-4"):
-        template_filename = "deep-cosplay/amiya-template-v5.txt"
-        topic_template_filename = "deep-cosplay/topic-template-v1.txt"
+        # template_filename = "deep-cosplay/amiya-template-v6.txt"
+        # topic_template_filename = "deep-cosplay/topic-template-v1.txt"
         # else:
         #     template_filename = "amiya-template-v2.txt"
 
         self.debug_log(f'template select: {model} {template_filename}')
 
-        command_template = await self.get_template("amiya-template-v5",template_filename)
+        command_template = await self.get_template(template_filename,template_filename)
 
         command = command_template
 
         command = command.replace("<<QUERY>>", doctor_talks)
         speech_data["QUERY"]=doctor_talks
 
-        topic_command = await self.get_template("topic-template-v1",topic_template_filename)
+        topic_command = await self.get_template(topic_template_filename,topic_template_filename)
         
         if self.amiya_topic is None or self.amiya_topic == ChatLogStorage.NoTopic:
             topic_command = ""
@@ -609,20 +613,42 @@ class DeepCosplay(ChatGPTMessageHandler):
         if image_url is None:
             return
         
-        if image_url.startswith('https://res.amiyabot.com/plugins/'):
-            # example: https://res.amiyabot.com/plugins/amiyabot-arknights-operator/aff579021e2049b785b3d68c87116374.png
-            # 截取里面的plugin id
-            plugin_id = image_url.split('/')[4]
+        try:
 
-            plugin_instance = main_bot.plugins[plugin_id]
+            if image_url.startswith('https://res.amiyabot.com/plugins/'):
+                # example: https://res.amiyabot.com/plugins/amiyabot-arknights-operator/aff579021e2049b785b3d68c87116374.png
+                # 截取里面的plugin id
+                plugin_id = image_url.split('/')[4]
 
-            html = plugin_instance.image_to_html_map[image_url]
+                plugin_instance = main_bot.plugins[plugin_id]
 
-            messageChain = Chain().html(html["template"],html["data"])
-        else:
-            messageChain = Chain().image(image_url)
+                html = plugin_instance.image_to_html_map[image_url]
 
-        if self.get_handler_config("silent_mode"):
+                messageChain = Chain().html(html["template"],html["data"])
+            else:
+                response = requests.head(image_url, timeout=2)
+                content_type = response.headers.get('Content-Type')
+                if content_type and content_type.startswith('image'):
+                    # 下载回本地放到dir_path
+                    image_name = image_url.split('/')[-1]
+                    image_path = f'{dir_path}/{image_name}'
+                    if not os.path.exists(dir_path):
+                        os.makedirs(dir_path)
+                    
+                    response = requests.get(image_url, timeoout=20)
+                    with open(image_path, 'wb') as file:
+                        file.write(response.content)
+
+                    messageChain = Chain().image(image_path)
+                else:
+                    self.debug_log(f'给出的Url不是有效的互联网图片: {image_url}')
+                    return
+
+            if self.get_handler_config("silent_mode"):
+                return
+
+            await self.instance.send_message(messageChain,channel_id=self.channel_id)
+
+        except Exception as e:
+            self.debug_log(f'发送图片时出现错误: {e} \n {traceback.format_exc()}')
             return
-
-        await self.instance.send_message(messageChain,channel_id=self.channel_id)
