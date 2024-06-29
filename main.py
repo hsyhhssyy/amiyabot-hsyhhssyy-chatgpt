@@ -16,6 +16,7 @@ from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.core.developer_types import BLMAdapter
 
 from .src.deep_cosplay import DeepCosplay
+from .src.assistant_amiya import AssistantAmiya
 from .src.trpg import TRPGMode
 from .src.online_troll import OnlineTrollMode
 from .src.ask_amiya import AskAmiya
@@ -42,7 +43,7 @@ def dynamic_get_channel_config_schema_data():
 
 bot = ChatGPTPluginInstance(
     name='AI智能回复',
-    version='4.1.3',
+    version='4.1.4',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用 大语言模型库 智能回复普通对话',
@@ -147,6 +148,17 @@ async def _(data: Message):
             context = channel_hander_context.get(data.channel_id)
             if context is None or not isinstance(context, DeepCosplay):
                 context = DeepCosplay(bot,blm_lib,data.channel_id,data.instance)
+                channel_hander_context[data.channel_id] = context
+        except Exception as e:
+            log.error(e)
+            return
+
+        await context.on_message(data)
+    elif mode == "助手模式":
+        try:
+            context = channel_hander_context.get(data.channel_id)
+            if context is None or not isinstance(context, AssistantAmiya):
+                context = AssistantAmiya(bot,blm_lib,data.channel_id)
                 channel_hander_context[data.channel_id] = context
         except Exception as e:
             log.error(e)

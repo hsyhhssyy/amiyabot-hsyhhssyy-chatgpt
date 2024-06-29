@@ -28,6 +28,9 @@
     ],
     "amiya_thinking":true
   },
+  "assistant_mode_config":{
+    "assistant_id": "..."
+  },
   "override_other_plugin": false,
   "black_list":[],
   "show_log": false,

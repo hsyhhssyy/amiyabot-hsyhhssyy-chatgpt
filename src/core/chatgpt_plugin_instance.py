@@ -63,7 +63,16 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
                 except KeyError as e:
                     stack_trace = traceback.format_exc()
                     self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
-        
+                
+                asistant_list = blm_lib.assistant_list()
+
+                try:
+                    data["properties"]["assistant_mode_config"]["properties"]["assistant_id"]["enum"] =  [model["name"]+"["+model["id"]+"]" for model in asistant_list]
+                except KeyError as e:
+                    stack_trace = traceback.format_exc()
+                    self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
+
+
         return data
 
     def generate_channel_schema(self):
@@ -89,6 +98,15 @@ class ChatGPTPluginInstance(AmiyaBotPluginInstance):
             except KeyError as e:
                 stack_trace = traceback.format_exc()
                 self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
+
+            asistant_list = blm_lib.assistant_list()
+
+            try:
+                data["properties"]["assistant_mode_config"]["properties"]["assistant_id"]["enum"] =  [model["name"]+"["+model["id"]+"]" for model in asistant_list] + ["跟随全局..."]
+            except KeyError as e:
+                stack_trace = traceback.format_exc()
+                self.debug_log(f"Expected keys not found in the JSON structure: {e}\n{stack_trace}")
+
         
         return data
 

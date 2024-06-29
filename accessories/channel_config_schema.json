@@ -24,7 +24,7 @@
       "title":"兔兔扮演模式",
       "description":"选择要兔兔扮演模式",
       "type": "string",
-      "enum": ["经典模式", "角色扮演", "跑团模式（测试中未完成）", "典孝急模式"]
+      "enum": ["经典模式", "角色扮演", "助手模式" , "跑团模式（测试中未完成）", "典孝急模式"]
     },
     "normal_mode_config": {
       "title":"常规配置",
@@ -81,6 +81,20 @@
           "title":"静默测试",
           "description":"开启以后，插件会正常执行所有功能，但是在发送消息那一步什么都不发送，可以用来提前测试兔兔AI在群内的可能效果",
           "type": "boolean"
+        }
+      }
+    },
+    "assistant_mode_config":{
+      "type": "object",
+      "title":"助手模式",
+      "properties": {
+        "assistant_id": {
+          "title":"选择助手",
+          "description":"选择一个已有的助手。",
+          "type": "string",
+          "enum":[
+            "跟随全局..."
+          ]
         }
       }
     },
