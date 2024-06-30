@@ -43,10 +43,10 @@ def dynamic_get_channel_config_schema_data():
 
 bot = ChatGPTPluginInstance(
     name='AI智能回复',
-    version='4.1.4',
+    version='4.2.1',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
-    description='调用 大语言模型库 智能回复普通对话',
+    description='调用"大语言模型库"插件智能回复普通对话',
     document=f'{curr_dir}/README.md',
     requirements=[
         Requirement("amiyabot-blm-library")

@@ -33,11 +33,20 @@ class AssistantAmiya(ChatGPTMessageHandler):
                 assistant_id = self.get_handler_config('assistant_id', "")
 
                 if not assistant_id:
+                    self.debug_log(f"Assistant ID not found! channel_id: {channel_id}")
+                    await data.send(Chain(data, reference=True).text("很抱歉博士，但是我现在暂时无法回答您的问题。"))
                     return
-                
+
                 # 处理一下assistant_id, 配置文件里 是 name[id] 的形式
                 assistant_id = assistant_id.split("[")[1].split("]")[0]
+                
+                assistant = self.blm_lib.get_assistant(assistant_id)
 
+                if not assistant:
+                    self.debug_log(f"Assistant not found! assistant_id: {assistant_id}, channel_id: {channel_id}")
+                    await data.send(Chain(data, reference=True).text("很抱歉博士，但是我现在暂时无法回答您的问题。"))
+                    return
+                
                 context_id = f'AssistantAmiya-{channel_id}'
 
                 if context_id not in self.context_map.keys():
@@ -60,6 +69,10 @@ class AssistantAmiya(ChatGPTMessageHandler):
                 content_to_send = [{"type":"text","role":"user","text":request_text}]
 
                 self.debug_log(f"assistant_id: {assistant_id}, thread_id: {thread_id}, channel_id: {channel_id}")
+
+                if len(data.image)>0:
+                    if assistant["vision"]:
+                        content_to_send.append({"type":"image_url","role":"user","url":data.image[0]})
 
                 amiya_answer = await self.blm_lib.assistant_run(
                     assistant_id=assistant_id,

@@ -4,6 +4,14 @@
 
 新点子征集中，如果你有什么好点子都可以来Github Issue中提出。
 
+### 4.2
+
+新增Assistant模式。
+现在可以对接ChatGPT Assistant 和 百度智能云千帆AppBuilder 了。可以通过该功能，为官方兔兔提供知识库。
+该功能不是开箱即用功能的，你需要对AI（至少对千帆AppBuilder或者ChatGPT Assistant）有一定了解，并在对应的网站创建了能够工作的App，再来将其应用在兔兔上。
+
+官方兔兔使用度智能云千帆AppBuilder配合本插件实现AI对话，你可以调戏一下官方兔兔了解本功能的效果。
+
 ### 4.1.3
 
 为了适配官兔，经典模式被重做，主要变化是：
@@ -189,5 +197,7 @@ AI视觉需要升级官方插件：大语言模型调用库到1.2版本及以上
 | 4.1.1  | 修复了经典模式和文心一言不兼容的问题 |
 | 4.1.2  | 修复字符集问题 |
 | 4.1.3  | 修复经典模式的问题，现在经典模式默认自带context |
+| 4.2.0  | 新增Assistant模式 |
+| 4.2.1  | 为Assistant模式添加识图的支持 | 
 
 [详细版本变更记录](https://github.com/hsyhhssyy/amiyabot-hsyhhssyy-chatgpt/blob/master/documents/changelog.md)
