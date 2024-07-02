@@ -10,7 +10,7 @@ if not os.path.exists(dir_path):
 
 
 class BLMFunctionCall:
-    functon_name: str
+    function_name: str
     function_schema: Union[str, dict]
     function: Callable[..., Any]
 
@@ -25,8 +25,7 @@ class BLMAdapter:
         model: Optional[Union[str, dict]] = None,
         context_id: Optional[str] = None,
         channel_id: Optional[str] = None,
-    ) -> Optional[str]:
-        ...
+    ) -> Optional[str]: ...
 
     async def chat_flow(
         self,
@@ -39,28 +38,35 @@ class BLMAdapter:
     ) -> Optional[str]:
         ...
 
-    async def assistant_flow(
+    def assistant_list(self) -> List[dict]:
+        ...
+
+    def get_assistant(self, assistant_id: str) -> dict:
+        ...
+
+    async def assistant_thread_touch(
+            self,
+            thread_id: str,
+            assistant_id: str
+    ):
+        ...
+
+    async def assistant_thread_create(
+            self,
+            assistant_id: str      
+        ):
+        ...
+    
+    async def assistant_run(
         self,
-        assistant: str,
-        prompt: Union[str, List[str]],
-        context_id: Optional[str] = None,
+        thread_id: str,
+        assistant_id: str,
+        messages: Union[dict, List[dict]],
         channel_id: Optional[str] = None,
-    ) -> Optional[str]:
-        ...
+        json_mode: Optional[bool] = False,
+    ) -> Optional[str]: ...
 
-    async def assistant_create(
-        self,
-        name: str,
-        instructions: str,
-        model: Optional[Union[str, dict]] = None,
-        functions: Optional[List[BLMFunctionCall]] = None,
-        code_interpreter: bool = False,
-        retrieval: Optional[List[str]] = None,
-    ) -> str:
-        ...
-
-    def model_list(self) -> List[dict]:
-        ...
+    def model_list(self) -> List[dict]: ...
 
     def get_model(self, model_name: str) -> dict:
         model_dict_list = self.model_list()
@@ -68,12 +74,9 @@ class BLMAdapter:
             if model_dict["model_name"] == model_name:
                 return model_dict
 
-    def get_model_quota_left(self, model_name: str) -> int:
-        ...
+    def get_model_quota_left(self, model_name: str) -> int: ...
 
-    def get_default_model(self) -> dict:
-        ...
+    def get_default_model(self) -> dict: ...
 
     @property
-    def amiyabot_function_calls(self) -> List[BLMFunctionCall]:
-        ...
+    def amiyabot_function_calls(self) -> List[BLMFunctionCall]: ...

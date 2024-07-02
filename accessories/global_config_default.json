@@ -1,6 +1,6 @@
 {
   "enable_in_this_channel":false,
-  "mode": "经典模式",  
+  "mode": "经典模式",
   "vision_enabled":false,
   "deep_cosplay_mode_config":{
       "interest_initial":1000.0,
@@ -28,9 +28,7 @@
     ],
     "amiya_thinking":true
   },
-  "assistant_mode_config":{
-    "assistant_id": "..."
-  },
+  "assistant_mode_config":{},
   "override_other_plugin": false,
   "black_list":[],
   "show_log": false,

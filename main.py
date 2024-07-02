@@ -9,8 +9,6 @@ from amiyabot import Message,Chain
 from core import log,Requirement
 from core import bot as main_bot
 
-from .src.supress_other_plugin import suppress_other_plugin
-
 from .src.core.trpg_storage import AmiyaBotChatGPTParamHistory,AmiyaBotChatGPTTRPGSpeechLog,AmiyaBotChatGPTExecutionLog
 from .src.core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from .src.core.developer_types import BLMAdapter
@@ -63,10 +61,6 @@ def load():
     AmiyaBotChatGPTTRPGSpeechLog.create_table(safe=True)
     AmiyaBotChatGPTExecutionLog.create_table(safe=True)
 
-    bot.debug_log(f"ChatGPT Plugin Override other plugins：{bot.get_config('override_other_plugin')}")
-    loop = asyncio.get_event_loop()
-    loop.create_task(suppress_other_plugin(bot))
-
 bot.load = load
 
 del load
@@ -116,8 +110,13 @@ async def _(data: Message):
     if not data.text and not data.image:
         return
     
+
+    channel = data.channel_id
+    if channel is None:
+        channel = f'User:{data.user_id}'
+
     try:
-        mode = bot.get_config('mode',data.channel_id)
+        mode = bot.get_config('mode',channel)
     except Exception as e:
             bot.debug_log(
                 f'Unknown Error {e} \n {traceback.format_exc()}')
@@ -125,30 +124,30 @@ async def _(data: Message):
     if data.text_original.upper().startswith("CHATGPT请问") or data.text_original.upper().startswith("文心一言请问"):
         mode = "请问模式"
 
-    bot.debug_log(f'[{data.channel_id:<10}] 模式:{mode} 消息:{data.text_original}')
+    bot.debug_log(f'[{channel:<10}] 模式:{mode} 消息:{data.text_original}')
 
     if mode == "请问模式":
-        model = bot.get_model_in_config('high_cost_model_name',data.channel_id)
+        model = bot.get_model_in_config('high_cost_model_name',channel)
         content_to_send =[{ "type": "text", "text": data.text }]
-        vision = bot.get_config('vision_enabled',data.channel_id)
+        vision = bot.get_config('vision_enabled',channel)
         if vision == True:
             if data.image and len(data.image) > 0:                
                 content_to_send = content_to_send +  [{"type":"image_url","url":imgPath} for imgPath in data.image]
                 bot.debug_log(content_to_send)
-                model = bot.get_model_in_config('vision_model_name',data.channel_id)
+                model = bot.get_model_in_config('vision_model_name',channel)
 
         raw_answer = await blm_lib.chat_flow(
             prompt=content_to_send,
-            channel_id = data.channel_id,
+            channel_id = channel,
             model=model
         )
         return Chain(data).text(raw_answer)
-    elif mode == "角色扮演" and data.channel_id is not None:
+    elif mode == "角色扮演":
         try:
-            context = channel_hander_context.get(data.channel_id)
+            context = channel_hander_context.get(channel)
             if context is None or not isinstance(context, DeepCosplay):
-                context = DeepCosplay(bot,blm_lib,data.channel_id,data.instance)
-                channel_hander_context[data.channel_id] = context
+                context = DeepCosplay(bot,blm_lib,channel,data.instance)
+                channel_hander_context[channel] = context
         except Exception as e:
             log.error(e)
             return
@@ -156,32 +155,32 @@ async def _(data: Message):
         await context.on_message(data)
     elif mode == "助手模式":
         try:
-            context = channel_hander_context.get(data.channel_id)
+            context = channel_hander_context.get(channel)
             if context is None or not isinstance(context, AssistantAmiya):
-                context = AssistantAmiya(bot,blm_lib,data.channel_id)
-                channel_hander_context[data.channel_id] = context
+                context = AssistantAmiya(bot,blm_lib,channel)
+                channel_hander_context[channel] = context
         except Exception as e:
             log.error(e)
             return
 
         await context.on_message(data)
-    elif mode == "典孝急模式" and data.channel_id is not None:
+    elif mode == "典孝急模式":
         try:
-            context = channel_hander_context.get(data.channel_id)
+            context = channel_hander_context.get(channel)
             if context is None or not isinstance(context, OnlineTrollMode):
-                context = OnlineTrollMode(bot,blm_lib,data.channel_id,data.instance)
-                channel_hander_context[data.channel_id] = context
+                context = OnlineTrollMode(bot,blm_lib,channel,data.instance)
+                channel_hander_context[channel] = context
         except Exception as e:
             log.error(e)
             return
 
         await context.on_message(data)
-    elif mode.startswith("跑团模式") and data.channel_id is not None:
+    elif mode.startswith("跑团模式"):
         try:
-            context = channel_hander_context.get(data.channel_id)
+            context = channel_hander_context.get(channel)
             if context is None or not isinstance(context, TRPGMode):
-                context = TRPGMode(bot,blm_lib,data.channel_id,data.instance)
-                channel_hander_context[data.channel_id] = context
+                context = TRPGMode(bot,blm_lib,channel,data.instance)
+                channel_hander_context[channel] = context
         except Exception as e:
             log.error(e)
             return

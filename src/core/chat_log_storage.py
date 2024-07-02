@@ -39,6 +39,10 @@ class ChatLogStorage():
         
         self.topic = None
 
+        self.eps = 120
+
+        self.assistant_thread = ""
+
         if collect_data:
             self.__collect_data()
 
@@ -83,7 +87,6 @@ class ChatLogStorage():
 
         # 因为使用 low_cost_model 的API没必要考虑富哥问题
         # eps = self.mediua_freq * (1 - 0.5 *random.random())  # 单位是 秒
-        eps = 120
 
         while True:
             await asyncio.sleep(2)
@@ -95,6 +98,10 @@ class ChatLogStorage():
                     self.topic = ChatLogStorage.NoTopic
                     self.debug_log(f'因长时间无人说话，丢弃当前话题{self.topic}')
                     continue
+
+            if self.eps==0:
+                self.topic = ChatLogStorage.NoTopic
+                continue
 
             min_samples = self.average_message_in_60_sec # 最少聚类
 
@@ -110,7 +117,7 @@ class ChatLogStorage():
             if min_samples > 50:
                 min_samples = 50
                 
-            clusters = dbscan(self.recent_messages, eps, min_samples)
+            clusters = dbscan(self.recent_messages, self.eps, min_samples)
 
             if len(clusters) <=0:
                 continue

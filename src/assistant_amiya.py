@@ -30,7 +30,7 @@ class AssistantAmiya(ChatGPTMessageHandler):
                 if channel_id is None:
                     channel_id = f"User:{data.user_id}"
                                 
-                assistant_id = self.get_handler_config('assistant_id', "")
+                assistant_id = self.bot.get_config('assistant_id',channel_id)
 
                 if not assistant_id:
                     self.debug_log(f"Assistant ID not found! channel_id: {channel_id}")

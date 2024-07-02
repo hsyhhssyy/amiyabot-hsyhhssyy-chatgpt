@@ -43,7 +43,12 @@ class DeepCosplay(ChatGPTMessageHandler):
 
         self.storage = ChatLogStorage(bot,blm_lib,self.channel_id)
 
+        use_topic = self.get_handler_config('use_topic',False)
+        if not use_topic:
+            self.storage.eps=0
+
         self.amiya_topic = ""
+        self.assistant_thread = None
         self.interest : float = 0
 
         self.reply_check = self.__reply_check_gen()
@@ -53,14 +58,9 @@ class DeepCosplay(ChatGPTMessageHandler):
     ERROR_REPLY = '抱歉博士，阿米娅有点不明白。'
 
     def __reply_check_gen(self):
-
         last_true_time = time.time()
-        consecutive_false_count = 0
-
-        while True:
-            
+        while True:            
             try:
-
                 mean_time = self.storage.mediua_freq         
                 if mean_time < 30:
                     mean_time = 30
@@ -73,12 +73,14 @@ class DeepCosplay(ChatGPTMessageHandler):
                 probability = 1 - ((1 - 1/mean_time) ** time_elapsed)
 
                 # 如果当前没有话题，则几率折半
-                if self.storage.topic is None:
+                if self.get_handler_config('use_topic',False) and self.storage.topic is None:
                     probability = probability * 0.5
                             
-                # 如果当前兴趣丢失，则概率归零
+                # 如果当前兴趣丢失，则概率归零，但是每过30分钟加0.1，最高0.5
                 if self.interest <= 0:
-                    probability = 0
+                    probability = 0 + (time_elapsed / 1800) * 0.1
+                    if probability > 0.5:
+                        probability = 0.5
 
                 rand_value = random.random()
 
@@ -86,10 +88,8 @@ class DeepCosplay(ChatGPTMessageHandler):
                     
                 if rand_value < probability:
                     last_true_time = current_time
-                    consecutive_false_count = 0
                     yield True
                 else:
-                    consecutive_false_count += 1
                     yield False
             
             except Exception as e:
@@ -141,6 +141,10 @@ class DeepCosplay(ChatGPTMessageHandler):
                 no_word_limit = False
                 message_in_conversation = self.storage.message_after(last_talk)
 
+                use_topic = self.get_handler_config('use_topic',False)
+                if not use_topic:
+                    self.storage.eps=0
+
                 # self.debug_log(f'should_talk check {len(message_in_conversation)}')
 
                 # 下面列出了所有兔兔可能会回复的条件:
@@ -155,7 +159,8 @@ class DeepCosplay(ChatGPTMessageHandler):
                         self.debug_log(f'话题改变 {self.amiya_topic} -> {self.storage.topic} interest重置:{self.interest}')
                     self.amiya_topic = self.storage.topic
 
-                if self.storage.topic is not None and self.storage.topic != ChatLogStorage.NoTopic:
+                # 如果不使用话题，或者话题不为空，且不是NoTopic
+                if not use_topic or (self.storage.topic is not None and self.storage.topic != ChatLogStorage.NoTopic):
                     # f_str = [f"{context.nickname}: {context.text} ({context.timestamp})\n"  for context in self.storage.recent_messages[-5:]]
                     # self.debug_log(f'Last 5: {f_str}')
 
@@ -169,6 +174,8 @@ class DeepCosplay(ChatGPTMessageHandler):
                             # 未命中加5，防止一堆人就这一个话题讨论一天，兔兔一直不插话
                             self.interest = self.interest + 5
 
+
+
                 # 最近的消息里有未处理的quote或者prefix
                 if any(obj.is_prefix or obj.is_quote for obj in message_in_conversation):
                     self.debug_log(f'有Quote/Prefix，强制发话,并切换话题为{self.amiya_topic}')
@@ -176,12 +183,18 @@ class DeepCosplay(ChatGPTMessageHandler):
                     should_talk = True
                     no_word_limit = True
 
+                    if self.interest <= 0:
+                        self.interest = float(self.get_handler_config('interest_initial',1000.0))
+
                 if should_talk:
                     last_talk = time.time()
                     
                     self.amiya_topic = self.storage.topic
 
-                    await self.ask_amiya(message_in_conversation,no_word_limit)
+                    if self.get_handler_config('use_assistant',False):
+                        await self.ask_amiya_with_assistant(message_in_conversation)
+                    else:
+                        await self.ask_amiya_with_model(message_in_conversation,no_word_limit)
 
             except Exception as e:
                 self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
@@ -267,8 +280,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             return param_value
 
     # 根据一大堆话生成一个回复
-    async def ask_amiya(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool) -> bool:
-
+    async def ask_amiya_with_model(self, context_list: List[ChatGPTMessageContext],no_word_limit:bool) -> bool:
 
         model_name = self.bot.get_model_in_config('high_cost_model_name',self.channel_id)
         model = self.blm_lib.get_model(model_name)
@@ -452,7 +464,7 @@ class DeepCosplay(ChatGPTMessageHandler):
             self.debug_log(f'当前兴趣: {self.interest} 增减值: - {interest_decrease} * {interest_factor} * {content_factor}')
 
             if self.interest <0 :
-                self.debug_log(f'兴趣耗尽')                 
+                self.debug_log(f'兴趣耗尽')            
             
             self.storage.recent_messages.append(amiya_context)
 
@@ -593,6 +605,187 @@ class DeepCosplay(ChatGPTMessageHandler):
         
 
         return True, message_send,interest_factor,response
+
+    async def ask_amiya_with_assistant(self, context_list: List[ChatGPTMessageContext]) -> bool:
+        
+        # context_list倒着查看,找到第一条阿米娅的消息,然后截断为Query和Memory
+        query_context = None
+        for context in reversed(context_list):
+            if context.user_id == ChatGPTMessageContext.AMIYA_USER_ID:
+                query_context = context
+                break
+        
+        if query_context is None:
+            query_context_index = 0
+        else:
+            query_context_index = context_list.index(query_context) + 1
+            query_context_index = min(query_context_index, len(context_list))
+
+        self.debug_log(f'query_context_index: {query_context_index}')
+
+        query_context_list = context_list[query_context_index:]
+        # memory_context_list = context_list[:query_context_index]
+
+
+        if self.bot.get_config('vision_enabled', self.channel_id) == True:
+            self.debug_log(f'vision_enabled')
+
+            # 输出所有的image_url
+            for context in query_context_list:
+                self.debug_log(f'context.image_url: {context.image_url}')
+
+        try:
+            content_factor, amiya_contexts = await self.get_amiya_assistant_response(query_context_list, self.channel_id)
+        except Exception as e:
+            self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
+            return False
+
+        if amiya_contexts:
+
+            for amiya_context in amiya_contexts:
+
+                interest_decrease = random.randint(50, 100)
+
+                time_factor = None
+                for previou_msg in reversed(self.storage.recent_messages):
+                    if previou_msg.user_id == ChatGPTMessageContext.AMIYA_USER_ID:
+                        time_factor = previou_msg.timestamp
+
+                interest_factor = calculate_timestamp_factor(time_factor,amiya_context.timestamp)
+
+                self.interest = self.interest - interest_decrease * interest_factor * content_factor
+                self.debug_log(f'当前兴趣: {self.interest} 增减值: - {interest_decrease} * {interest_factor} * {content_factor}')
+
+                if self.interest <0 :
+                    self.debug_log(f'兴趣耗尽')
+                    self.assistant_thread=None
+
+                self.storage.recent_messages.append(amiya_context)
+
+        return True
+
+    async def get_amiya_assistant_response(self, context_list: List[ChatGPTMessageContext], channel_id: str):
+
+        assistant_id = self.bot.get_config('assistant_id',self.channel_id)
+
+        if not assistant_id:
+            self.debug_log(f"Assistant ID not found! channel_id: {self.channel_id}")
+            return None,None
+        
+        # 处理一下assistant_id, 配置文件里 是 name[id] 的形式
+        assistant_id = assistant_id.split("[")[1].split("]")[0]
+
+        # 拼接消息
+        content = []
+
+        for context in context_list:
+            content.append({
+                "role": "user",
+                "type":"text",
+                "text": context.nickname + "博士:" + context.text
+            })
+
+            if context.image_url:
+                content.append({
+                    "role": "user",
+                    "type":"image_url",
+                    "url": context.image_url
+                })
+
+        # 检查Conversation
+        if self.assistant_thread != None:
+            ret = await self.blm_lib.assistant_thread_touch(self.assistant_thread,assistant_id)
+            if not ret:
+                # 失效了
+                self.debug_log(f"Assistant Thread Touch Failed! channel_id: {self.channel_id} thread_id: {self.assistant_thread} {ret}!")
+                self.assistant_thread = None
+        
+        if self.assistant_thread == None:
+            ret = await self.blm_lib.assistant_thread_create(assistant_id)
+            if ret:
+                self.assistant_thread = ret
+                self.debug_log(f"Assistant Thread Create Success! channel_id: {self.channel_id} thread_id: {self.assistant_thread}")
+        
+        if not self.assistant_thread:
+            self.debug_log(f"Assistant Thread Create Failed! channel_id: {self.channel_id}")
+            return
+
+        corelation_on_topic = 0.8
+        corelation_on_conversation = 0.8
+
+        interest_factor = 1
+
+        try:
+            json_str = await self.blm_lib.assistant_run(
+                thread_id=self.assistant_thread,
+                assistant_id=assistant_id,
+                messages=content,
+                channel_id=channel_id,
+                json_mode=True
+            )
+
+            if json_str:
+                json_objects = json.loads(json_str)
+            else:
+                json_objects = []
+
+            response = json_str
+            self.debug_log(f'Assistant原始回复:{json_objects}')
+
+            words_response = None
+            response_with_mental = None
+
+            if not isinstance(json_objects, list):
+                json_objects = [json_objects]
+
+            amiya_contexts = []
+
+            for json_obj in json_objects:
+                if json_obj.get('role', None) == '阿米娅':
+                    response_type = json_obj.get('type', "text")
+                    words_response = json_obj.get('reply', None)
+                    response_with_mental = words_response
+                    if self.get_handler_config('output_mental', False) == True:
+                        mental = json_obj.get('mental', None)
+                        if mental is not None and mental != "":
+                            response_with_mental = f'({mental})\n{words_response if words_response is not None else ""}'
+                    
+                    if words_response is None:
+                        continue
+
+                    corelation_on_topic = float(json_obj.get('corelation_on_topic', 0.8))
+                    corelation_on_conversation = float(json_obj.get('corelation_on_conversation', 0.8))
+
+                    temp_interest_factor =  scale_to_reverse_exponential(
+                        corelation_on_topic, 1, 5, 0, 0.8) * scale_to_reverse_exponential(corelation_on_conversation, 1, 5, 0, 0.8)
+
+                    if temp_interest_factor > interest_factor:
+                        interest_factor = temp_interest_factor
+                    
+                    if not self.get_handler_config("use_topic", False):
+                        interest_factor = interest_factor / 10
+
+                    amiya_context = ChatGPTMessageContext(words_response, '阿米娅')
+                    amiya_contexts.append(amiya_context)
+
+                    if response_type == "text":
+                        self.debug_log(f'ChatGPT Text回复:{words_response}')
+                        await self.send_message(response_with_mental)
+                    elif response_type == "image_url":
+                        self.debug_log(f'ChatGPT Image回复:{words_response}')
+                        await self.send_image(words_response)
+
+                    if self.get_handler_config('output_activity', False) == True:
+                        activity = json_obj.get('activity', None)
+                        if activity is not None and activity != "":
+                            await self.send_message(f'({activity})')
+        
+            return interest_factor, amiya_contexts
+        
+        except Exception as e:
+            self.debug_log(f'Unknown Error {e} \n {traceback.format_exc()}')
+        
+        return None,None
 
     # 发送消息到指定频道
     async def send_message(self, message: str):

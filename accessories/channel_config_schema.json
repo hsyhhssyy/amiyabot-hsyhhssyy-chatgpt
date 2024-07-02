@@ -7,6 +7,30 @@
       "description":"加入一个功能的总开关，并且默认是关闭的。这样同时参与多个群的兔兔也不会疯狂消费ChatGPT了",
       "type": "boolean"
     },
+    "high_cost_model_name": {
+      "title":"性能型模型",
+      "description":"选择一个用于处理复杂任务的模型。",
+      "type": "string",
+      "enum":[
+        "跟随全局..."
+      ]
+    },
+    "low_cost_model_name": {
+      "title":"经济型模型",
+      "description":"选择一个用于处理琐碎杂事的比较便宜的模型。",
+      "type": "string",
+      "enum":[
+        "跟随全局..."
+      ]
+    },
+    "assistant_id": {
+      "title":"默认助手",
+      "description":"选择一个已有的助手。",
+      "type": "string",
+      "enum":[
+        "..."
+      ]
+    },
     "vision_enabled": {
       "title":"AI视觉",
       "description":"开启以后，插件可以支持传输图像。",
@@ -57,6 +81,16 @@
       "type": "object",
       "title":"角色扮演",
       "properties": {
+        "use_assistant": {
+          "title":"使用助手",
+          "description":"如果你配置了Assistant，推荐使用Assistant配合角色扮演。",
+          "type": "boolean"
+        },
+        "use_topic": {
+          "title":"检测话题",
+          "description":"开启后，会先使用AI判断过往多条对话是否属于同一话题，如果不是则发言概率大幅下降。",
+          "type": "boolean"
+        },
         "interest_initial": {
           "title":"初始兴趣",
           "description":"兔兔每次开启对话时都会获得一个初始兴趣，兔兔的各种行为都会消耗不同量的兴趣，兴趣耗尽兔兔就会回到沉默，可以用来控制兔兔活跃的时长。",
@@ -88,31 +122,12 @@
       "type": "object",
       "title":"助手模式",
       "properties": {
-        "assistant_id": {
-          "title":"选择助手",
-          "description":"选择一个已有的助手。",
-          "type": "string",
-          "enum":[
-            "跟随全局..."
-          ]
+        "space_holder": {
+          "title":"占位配置项",
+          "description":"无作用",
+          "type": "boolean"
         }
       }
-    },
-    "high_cost_model_name": {
-      "title":"性能型模型",
-      "description":"选择一个用于处理复杂任务的模型。",
-      "type": "string",
-      "enum":[
-        "跟随全局..."
-      ]
-    },
-    "low_cost_model_name": {
-      "title":"经济型模型",
-      "description":"选择一个用于处理琐碎杂事的比较便宜的模型。",
-      "type": "string",
-      "enum":[
-        "跟随全局..."
-      ]
     },
     "black_list": {
       "title":"黑名单",

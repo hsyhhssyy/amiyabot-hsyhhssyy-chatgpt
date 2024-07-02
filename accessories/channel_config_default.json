@@ -17,9 +17,7 @@
       "output_activity":false,
       "show_log_in_chat":false
     },
-    "assistant_mode_config":{
-      "assistant_id": "..."
-    },
+    "assistant_mode_config":{},
     "high_cost_model_name":"跟随全局...",
     "low_cost_model_name":"跟随全局...",
     "vision_model_name":"跟随全局...",
