@@ -1,5 +1,10 @@
 # 版本变更
 
+## 4.2.2
+
+将median改成自己实现
+deep_cosplay改为可以用Assistant
+
 ## 4.2.1
 
 让Assistant可以读图

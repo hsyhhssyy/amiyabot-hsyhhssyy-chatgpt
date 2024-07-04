@@ -41,7 +41,7 @@ def dynamic_get_channel_config_schema_data():
 
 bot = ChatGPTPluginInstance(
     name='AI智能回复',
-    version='4.2.1',
+    version='4.2.2',
     plugin_id='amiyabot-hsyhhssyy-chatgpt',
     plugin_type='',
     description='调用"大语言模型库"插件智能回复普通对话',
@@ -131,7 +131,7 @@ async def _(data: Message):
         content_to_send =[{ "type": "text", "text": data.text }]
         vision = bot.get_config('vision_enabled',channel)
         if vision == True:
-            if data.image and len(data.image) > 0:                
+            if data.image and len(data.image) > 0:
                 content_to_send = content_to_send +  [{"type":"image_url","url":imgPath} for imgPath in data.image]
                 bot.debug_log(content_to_send)
                 model = bot.get_model_in_config('vision_model_name',channel)

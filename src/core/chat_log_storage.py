@@ -10,7 +10,6 @@ import traceback
 
 from collections import Counter,deque
 from typing import List, Tuple
-from statistics import median
 
 from amiyabot import Message, Chain
 
@@ -21,7 +20,7 @@ from ..core.chatgpt_plugin_instance import ChatGPTPluginInstance
 from ..core.developer_types import BLMAdapter
 
 from ..util.string_operation import convert_to_float
-from ..util.complex_math import find_most_recent_cluster,dbscan
+from ..util.complex_math import find_most_recent_cluster,dbscan,median
 
 curr_dir = os.path.dirname(__file__)
 

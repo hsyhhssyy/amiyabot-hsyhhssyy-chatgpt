@@ -77,3 +77,25 @@ def frequency_controller_generator():
         yield True if call_count <= max_freq else False
 
 frequency_controller = frequency_controller_generator()
+
+def selection_sort(arr):
+    for i in range(len(arr)):
+        min_idx = i
+        for j in range(i+1, len(arr)):
+            if arr[j] < arr[min_idx]:
+                min_idx = j
+        arr[i], arr[min_idx] = arr[min_idx], arr[i]
+    return arr
+
+def median(nums):
+    if not nums:
+        raise ValueError("The list is empty")
+
+    sorted_nums = selection_sort(nums.copy())  # 使用选择排序进行排序
+    n = len(sorted_nums)
+    mid = n // 2
+
+    if n % 2 == 0:  # 如果列表长度是偶数
+        return (sorted_nums[mid - 1] + sorted_nums[mid]) / 2
+    else:  # 如果列表长度是奇数
+        return sorted_nums[mid]
